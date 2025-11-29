@@ -40,6 +40,7 @@ pub mod bonding_curve {
             .ok_or(ErrorCode::MathOverflow)?;
         pool.trade_count = 0;
         pool.total_liquidity = 0;
+        pool.is_graduated = false; // Trading enabled initially
         pool.bump = ctx.bumps.pool;
 
         msg!("Pool initialized with {} XNT (single-sided)", xnt_amount);
@@ -54,6 +55,9 @@ pub mod bonding_curve {
     /// Price increases as XNT is purchased
     pub fn buy(ctx: Context<Buy>, usdc_amount: u64) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
+
+        // Check if trading is locked (pool graduated)
+        require!(!pool.is_graduated, ErrorCode::TradingLocked);
 
         // Calculate XNT output using constant product formula
         // k = x * y (constant)
@@ -121,6 +125,9 @@ pub mod bonding_curve {
         pool.usdc_reserve = new_usdc_reserve as u64;
         pool.trade_count += 1;
 
+        // Check if pool has reached graduation
+        check_and_update_graduation(pool, &ctx.accounts.pool_xnt, &ctx.accounts.pool_usdc)?;
+
         Ok(())
     }
 
@@ -128,6 +135,9 @@ pub mod bonding_curve {
     /// Price decreases as XNT is sold
     pub fn sell(ctx: Context<Sell>, xnt_amount: u64) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
+
+        // Check if trading is locked (pool graduated)
+        require!(!pool.is_graduated, ErrorCode::TradingLocked);
 
         // Calculate USDC output using constant product formula
         // k = x * y (constant)
@@ -202,6 +212,9 @@ pub mod bonding_curve {
         pool.xnt_reserve = new_xnt_reserve as u64;
         pool.usdc_reserve = new_usdc_reserve as u64;
         pool.trade_count += 1;
+
+        // Check if pool has reached graduation
+        check_and_update_graduation(pool, &ctx.accounts.pool_xnt, &ctx.accounts.pool_usdc)?;
 
         Ok(())
     }
@@ -454,6 +467,43 @@ pub mod bonding_curve {
     }
 }
 
+/// Check if pool has reached graduation (50/50 balance within 3% tolerance)
+/// and update is_graduated flag if so
+fn check_and_update_graduation(
+    pool: &mut Pool,
+    pool_xnt_account: &Account<TokenAccount>,
+    pool_usdc_account: &Account<TokenAccount>,
+) -> Result<()> {
+    // Skip if already graduated
+    if pool.is_graduated {
+        return Ok(());
+    }
+
+    // Get real balances
+    let real_xnt = pool_xnt_account.amount;
+    let real_usdc = pool_usdc_account.amount;
+
+    // Calculate current price
+    let current_price = pool.usdc_reserve as f64 / pool.xnt_reserve as f64;
+
+    // Calculate pool value distribution
+    let xnt_value_in_usdc = (real_xnt as f64) * current_price;
+    let total_pool_value = xnt_value_in_usdc + (real_usdc as f64);
+
+    // Calculate USDC percentage
+    let usdc_percentage = (real_usdc as f64 / total_pool_value) * 100.0;
+
+    // Check if within 47-53% range (50% ± 3%)
+    if usdc_percentage >= 47.0 && usdc_percentage <= 53.0 {
+        pool.is_graduated = true;
+        msg!("🎓 POOL GRADUATED! Trading locked.");
+        msg!("Balance: {:.1}% USDC / {:.1}% XNT", usdc_percentage, 100.0 - usdc_percentage);
+        msg!("Pool can now be migrated to DEX");
+    }
+
+    Ok(())
+}
+
 #[derive(Accounts)]
 pub struct InitializePool<'info> {
     #[account(mut)]
@@ -667,6 +717,7 @@ pub struct Pool {
     pub k: u128,              // Constant product
     pub trade_count: u64,
     pub total_liquidity: u64, // Total LP tokens issued
+    pub is_graduated: bool,   // Trading locked when pool reaches 50/50 balance
     pub bump: u8,
 }
 
@@ -714,4 +765,6 @@ pub enum ErrorCode {
     InsufficientLiquidityMinted,
     #[msg("Price would drop below $1.00 minimum")]
     PriceBelowMinimum,
+    #[msg("Trading locked: Pool has graduated (reached 50/50 balance)")]
+    TradingLocked,
 }
