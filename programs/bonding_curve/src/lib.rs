@@ -467,7 +467,7 @@ pub mod bonding_curve {
     }
 }
 
-/// Check if pool has reached graduation (50/50 balance within 3% tolerance)
+/// Check if pool has reached graduation (XNT and USDC balances equal within 5% tolerance)
 /// and update is_graduated flag if so
 fn check_and_update_graduation(
     pool: &mut Pool,
@@ -479,25 +479,30 @@ fn check_and_update_graduation(
         return Ok(());
     }
 
-    // Get real balances
-    let real_xnt = pool_xnt_account.amount;
-    let real_usdc = pool_usdc_account.amount;
+    // Get real token balances
+    let real_xnt = pool_xnt_account.amount as u128;
+    let real_usdc = pool_usdc_account.amount as u128;
 
-    // Calculate current price
-    let current_price = pool.usdc_reserve as f64 / pool.xnt_reserve as f64;
+    // Calculate the ratio between the two balances
+    // We want them to be approximately equal (within 5% tolerance)
+    let larger = real_xnt.max(real_usdc);
+    let smaller = real_xnt.min(real_usdc);
 
-    // Calculate pool value distribution
-    let xnt_value_in_usdc = (real_xnt as f64) * current_price;
-    let total_pool_value = xnt_value_in_usdc + (real_usdc as f64);
+    // If smaller is 0, we can't have equal balances yet
+    if smaller == 0 {
+        return Ok(());
+    }
 
-    // Calculate USDC percentage
-    let usdc_percentage = (real_usdc as f64 / total_pool_value) * 100.0;
+    // Calculate percentage difference: ((larger - smaller) / larger) * 100
+    // If this is <= 5%, the balances are within 5% of each other
+    let difference_pct = ((larger - smaller) * 100) / larger;
 
-    // Check if within 47-53% range (50% ± 3%)
-    if usdc_percentage >= 47.0 && usdc_percentage <= 53.0 {
+    // Check if balances are within 5% of each other (95-105% ratio)
+    if difference_pct <= 5 {
         pool.is_graduated = true;
         msg!("🎓 POOL GRADUATED! Trading locked.");
-        msg!("Balance: {:.1}% USDC / {:.1}% XNT", usdc_percentage, 100.0 - usdc_percentage);
+        msg!("Real XNT: {} | Real USDC: {}", real_xnt, real_usdc);
+        msg!("Balances are equal within {}% tolerance", difference_pct);
         msg!("Pool can now be migrated to DEX");
     }
 

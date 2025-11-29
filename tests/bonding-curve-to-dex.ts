@@ -35,7 +35,7 @@ describe("bonding-curve-to-dex", () => {
 
   function printTableHeader() {
     console.log("╔═══════╦═══════════════╦══════════════════╦═══════════════╦═══════════════╦═══════════════╦═══════════════╦═══════════════╗");
-    console.log("║ Trade ║   USDC In     ║    XNT Out       ║  Eff. Price   ║  New Price    ║  Real USDC    ║  XNT Reserve  ║  Balance      ║");
+    console.log("║ Trade ║   USDC In     ║    XNT Out       ║  Eff. Price   ║  New Price    ║  Real USDC    ║  XNT Reserve  ║  Bal. Diff %  ║");
     console.log("╠═══════╬═══════════════╬══════════════════╬═══════════════╬═══════════════╬═══════════════╬═══════════════╬═══════════════╣");
   }
 
@@ -51,7 +51,7 @@ describe("bonding-curve-to-dex", () => {
     newPrice: number,
     realUsdc: number,
     xntReserve: number,
-    balancePct: number
+    balanceDiffPct: number
   ) {
     const tradeStr = String(tradeNum).padStart(5);
     const usdcInStr = ("$" + fmt(usdcIn / 1e6)).padStart(13);
@@ -60,7 +60,7 @@ describe("bonding-curve-to-dex", () => {
     const newPriceStr = ("$" + newPrice.toFixed(4)).padStart(13);
     const realUsdcStr = ("$" + fmt(realUsdc / 1e6)).padStart(13);
     const xntResStr = (fmt(xntReserve / 1e6) + "M").padStart(13);
-    const balanceStr = (balancePct.toFixed(1) + "% U").padStart(13);
+    const balanceStr = (balanceDiffPct.toFixed(1) + "%").padStart(13);
 
     console.log(`║ ${tradeStr} ║ ${usdcInStr} ║ ${xntOutStr} ║ ${effPriceStr} ║ ${newPriceStr} ║ ${realUsdcStr} ║ ${xntResStr} ║ ${balanceStr} ║`);
   }
@@ -156,10 +156,10 @@ describe("bonding-curve-to-dex", () => {
     const pool = await program.account.pool.fetch(poolPda);
     const startingXnt = pool.xntReserve.toNumber();
 
-    console.log(`🎯 Graduation Target: 50/50 balanced liquidity`);
-    console.log(`   - Real XNT value = Real USDC value`);
-    console.log(`   - Minimum 20 trades required`);
-    console.log(`   - Virtual USDC fully replaced with real USDC\n`);
+    console.log(`🎯 Graduation Target: Equal token balances`);
+    console.log(`   - Real XNT amount ≈ Real USDC amount (within 5%)`);
+    console.log(`   - Trading locks automatically when criteria met`);
+    console.log(`   - Example: 2M XNT and 2M USDC (±5%)\n`);
 
     let buyCount = 0;
     let totalUsdcSpent = 0;
@@ -181,30 +181,53 @@ describe("bonding-curve-to-dex", () => {
 
       const realXnt = parseInt(poolXntBalance.value.amount);
       const realUsdc = parseInt(poolUsdcBalance.value.amount);
-      const currentPrice = poolBefore.usdcReserve.toNumber() / poolBefore.xntReserve.toNumber();
 
-      // Calculate pool value split
-      const xntValueInUsdc = realXnt * currentPrice;
-      const totalPoolValue = xntValueInUsdc + realUsdc;
-      const usdcPercentage = (realUsdc / totalPoolValue) * 100;
-      const xntPercentage = (xntValueInUsdc / totalPoolValue) * 100;
+      // Check if balances are equal within 5% tolerance
+      const larger = Math.max(realXnt, realUsdc);
+      const smaller = Math.min(realXnt, realUsdc);
+      const balanceDiffPct = smaller > 0 ? ((larger - smaller) / larger) * 100 : 100;
+      const balancesAreEqual = balanceDiffPct <= 5;
 
       // Get trader balance before trade
       const traderXntBefore = await provider.connection.getTokenAccountBalance(traderXnt);
 
-      // Execute buy
-      await program.methods
-        .buy(new anchor.BN(buyAmount))
-        .accounts({
-          buyer: payer.publicKey,
-          pool: poolPda,
-          poolXnt,
-          poolUsdc,
-          buyerUsdc: traderUsdc,
-          buyerXnt: traderXnt,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .rpc();
+      // Execute buy - will throw TradingLocked error when pool graduates
+      try {
+        await program.methods
+          .buy(new anchor.BN(buyAmount))
+          .accounts({
+            buyer: payer.publicKey,
+            pool: poolPda,
+            poolXnt,
+            poolUsdc,
+            buyerUsdc: traderUsdc,
+            buyerXnt: traderXnt,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .rpc();
+      } catch (err) {
+        // Check if this is the TradingLocked error (pool graduated)
+        if (err.toString().includes("TradingLocked") || err.toString().includes("6007")) {
+          printTableFooter();
+          console.log(`\n🎓 POOL GRADUATED! Trading automatically locked.\n`);
+
+          // Fetch final balances
+          const finalPoolXnt = await provider.connection.getTokenAccountBalance(poolXnt);
+          const finalPoolUsdc = await provider.connection.getTokenAccountBalance(poolUsdc);
+          const finalRealXnt = parseInt(finalPoolXnt.value.amount);
+          const finalRealUsdc = parseInt(finalPoolUsdc.value.amount);
+          const finalLarger = Math.max(finalRealXnt, finalRealUsdc);
+          const finalSmaller = Math.min(finalRealXnt, finalRealUsdc);
+          const finalBalanceDiff = ((finalLarger - finalSmaller) / finalLarger) * 100;
+
+          console.log(`   ✅ Balances are equal: XNT ${(finalRealXnt / 1e6).toLocaleString()} ≈ USDC ${(finalRealUsdc / 1e6).toLocaleString()}`);
+          console.log(`   ✅ Difference: ${finalBalanceDiff.toFixed(2)}% (≤5% tolerance)`);
+          console.log(`   ✅ Total trades: ${buyCount}\n`);
+          break;
+        }
+        // If it's a different error, rethrow it
+        throw err;
+      }
 
       buyCount++;
       totalUsdcSpent += buyAmount;
@@ -218,17 +241,18 @@ describe("bonding-curve-to-dex", () => {
       const realUsdcAfter = parseInt(poolUsdcAfter.value.amount);
       const priceAfter = poolAfter.usdcReserve.toNumber() / poolAfter.xntReserve.toNumber();
 
-      // Recalculate balance after trade
+      // Recalculate balance equality after trade
       const poolXntAfter = await provider.connection.getTokenAccountBalance(poolXnt);
       const realXntAfter = parseInt(poolXntAfter.value.amount);
-      const xntValueAfter = realXntAfter * priceAfter;
-      const totalValueAfter = xntValueAfter + realUsdcAfter;
-      const usdcPctAfter = (realUsdcAfter / totalValueAfter) * 100;
+
+      const largerAfter = Math.max(realXntAfter, realUsdcAfter);
+      const smallerAfter = Math.min(realXntAfter, realUsdcAfter);
+      const balanceDiffPctAfter = smallerAfter > 0 ? ((largerAfter - smallerAfter) / largerAfter) * 100 : 100;
 
       // Calculate effective price for this trade
       const effectivePrice = buyAmount / xntReceived;
 
-      // Print table row
+      // Print table row (using balance diff % instead of USDC %)
       printTableRow(
         buyCount,
         buyAmount,
@@ -237,22 +261,11 @@ describe("bonding-curve-to-dex", () => {
         priceAfter,
         realUsdcAfter,
         poolAfter.xntReserve.toNumber(),
-        usdcPctAfter
+        balanceDiffPctAfter
       );
 
-      // Check graduation criteria after each trade
-      // Note: Constant product pools starting from single-sided liquidity
-      // can realistically reach ~40-45% USDC before approaching full depletion
-      const isBalanced = usdcPctAfter >= 40 && usdcPctAfter <= 60; // 50% ± 10%
-      const hasMinTrades = buyCount >= 20;
-
-      if (isBalanced && hasMinTrades) {
-        printTableFooter();
-        console.log(`\n🎓 GRADUATION CRITERIA MET!\n`);
-        console.log(`   ✅ Pool is balanced: USDC ${usdcPctAfter.toFixed(1)}% / XNT ${(100-usdcPctAfter).toFixed(1)}%`);
-        console.log(`   ✅ Minimum trades: ${buyCount} trades (≥20 required)\n`);
-        break;
-      }
+      // Note: Graduation happens automatically in the contract when balances are equal
+      // The next trade attempt will fail with TradingLocked error
 
       // Prevent infinite loop
       if (buyCount >= 100) {
@@ -272,7 +285,9 @@ describe("bonding-curve-to-dex", () => {
     console.log(`  Total XNT Bought: ${(totalXntReceived / 1e6).toLocaleString()} XNT`);
     console.log(`  Avg Price:        $${(totalUsdcSpent / totalXntReceived).toFixed(6)}\n`);
 
-    assert.isTrue(buyCount >= 20, "Should have at least 20 trades for graduation");
+    // Verify that pool has graduated
+    const finalPool = await program.account.pool.fetch(poolPda);
+    assert.isTrue(finalPool.isGraduated, "Pool should be graduated after reaching equal balances");
   });
 
   it("Final pool state: Ready for DEX migration", async () => {
@@ -317,21 +332,24 @@ describe("bonding-curve-to-dex", () => {
     console.log(`  Constant k:        ${pool.k.toString()}`);
     console.log(``);
 
-    // Check graduation criteria
-    const isBalanced = usdcPercentage >= 40 && usdcPercentage <= 60;
-    const hasMinTrades = pool.tradeCount.toNumber() >= 20;
+    // Check graduation criteria - now based on token amount equality
+    const larger = Math.max(realXnt, realUsdc);
+    const smaller = Math.min(realXnt, realUsdc);
+    const balanceDiffPct = smaller > 0 ? ((larger - smaller) / larger) * 100 : 100;
     const virtualReplacementPct = (realUsdc / virtualUsdc) * 100;
 
     console.log(`🎓 Graduation Status:`);
-    if (isBalanced && hasMinTrades) {
+    if (pool.isGraduated) {
       console.log(`   ✅ GRADUATED - Ready for DEX Migration!`);
-      console.log(`   ✅ Balance: USDC ${usdcPercentage.toFixed(1)}% / XNT ${xntPercentage.toFixed(1)}% (40-60% range)`);
-      console.log(`   ✅ Trades: ${pool.tradeCount.toString()} (≥20 required)`);
+      console.log(`   ✅ Token Balances Equal: XNT ${(realXnt / 1e6).toLocaleString()} ≈ USDC ${(realUsdc / 1e6).toLocaleString()}`);
+      console.log(`   ✅ Balance Difference: ${balanceDiffPct.toFixed(2)}% (≤5% tolerance)`);
+      console.log(`   ✅ Trades: ${pool.tradeCount.toString()}`);
       console.log(`   ✅ Virtual USDC replaced: ${virtualReplacementPct.toFixed(1)}%`);
     } else {
       console.log(`   ⚠️  NOT YET GRADUATED`);
-      console.log(`   ${isBalanced ? '✅' : '❌'} Balance: USDC ${usdcPercentage.toFixed(1)}% / XNT ${xntPercentage.toFixed(1)}% (need 40-60%)`);
-      console.log(`   ${hasMinTrades ? '✅' : '❌'} Trades: ${pool.tradeCount.toString()} (need ≥20)`);
+      console.log(`   ❌ Token Balances: XNT ${(realXnt / 1e6).toLocaleString()} vs USDC ${(realUsdc / 1e6).toLocaleString()}`);
+      console.log(`   ❌ Balance Difference: ${balanceDiffPct.toFixed(2)}% (need ≤5%)`);
+      console.log(`   Trades: ${pool.tradeCount.toString()}`);
       console.log(`   Virtual USDC replaced: ${virtualReplacementPct.toFixed(1)}%`);
     }
 
@@ -344,8 +362,8 @@ describe("bonding-curve-to-dex", () => {
     console.log(``);
 
     // Verify graduation criteria
-    assert.isTrue(isBalanced, `Pool should be balanced (40-60%), got USDC ${usdcPercentage.toFixed(1)}%`);
-    assert.isTrue(hasMinTrades, `Should have at least 20 trades, got ${pool.tradeCount.toString()}`);
+    assert.isTrue(pool.isGraduated, `Pool should be graduated (balances equal within 5%)`);
+    assert.isTrue(balanceDiffPct <= 5, `Balance difference should be ≤5%, got ${balanceDiffPct.toFixed(2)}%`);
     assert.isTrue(currentPrice > 1.0, "Price should be above initial $1.00");
   });
 });
