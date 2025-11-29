@@ -34,13 +34,13 @@ describe("bonding-curve-to-dex", () => {
   }
 
   function printTableHeader() {
-    console.log("╔═══════╦═══════════════╦═══════════════╦═══════════════╦═══════════════╦═══════════════╦═══════════════╦═══════════════╗");
-    console.log("║ Trade ║   USDC In     ║   XNT Out     ║  Eff. Price   ║  New Price    ║  Real USDC    ║  XNT Reserve  ║  Balance      ║");
-    console.log("╠═══════╬═══════════════╬═══════════════╬═══════════════╬═══════════════╬═══════════════╬═══════════════╬═══════════════╣");
+    console.log("╔═══════╦═══════════════╦══════════════════╦═══════════════╦═══════════════╦═══════════════╦═══════════════╦═══════════════╗");
+    console.log("║ Trade ║   USDC In     ║    XNT Out       ║  Eff. Price   ║  New Price    ║  Real USDC    ║  XNT Reserve  ║  Balance      ║");
+    console.log("╠═══════╬═══════════════╬══════════════════╬═══════════════╬═══════════════╬═══════════════╬═══════════════╬═══════════════╣");
   }
 
   function printTableFooter() {
-    console.log("╚═══════╩═══════════════╩═══════════════╩═══════════════╩═══════════════╩═══════════════╩═══════════════╩═══════════════╝");
+    console.log("╚═══════╩═══════════════╩══════════════════╩═══════════════╩═══════════════╩═══════════════╩═══════════════╩═══════════════╝");
   }
 
   function printTableRow(
@@ -55,7 +55,7 @@ describe("bonding-curve-to-dex", () => {
   ) {
     const tradeStr = String(tradeNum).padStart(5);
     const usdcInStr = ("$" + fmt(usdcIn / 1e6)).padStart(13);
-    const xntOutStr = (fmt(xntOut / 1e6) + " XNT").padStart(13);
+    const xntOutStr = (fmt(xntOut / 1e6) + " XNT").padStart(16);
     const effPriceStr = ("$" + effectivePrice.toFixed(4)).padStart(13);
     const newPriceStr = ("$" + newPrice.toFixed(4)).padStart(13);
     const realUsdcStr = ("$" + fmt(realUsdc / 1e6)).padStart(13);
