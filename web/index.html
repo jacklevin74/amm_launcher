@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lottery AMM - Pool Manager</title>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="https://unpkg.com/@coral-xyz/anchor@0.31.1/dist/browser/index.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .input-group input,
+        .input-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus,
+        .input-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .status {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+
+        .status h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-item label {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .status-item span {
+            color: #333;
+            font-family: monospace;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+
+        .pool-list {
+            list-style: none;
+        }
+
+        .pool-item {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+
+        .pool-item strong {
+            color: #667eea;
+        }
+
+        .wallet-info {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 6px;
+            color: white;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .wallet-info code {
+            background: rgba(0,0,0,0.2);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        #output {
+            background: #1e1e1e;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+
+        #output div {
+            margin: 4px 0;
+        }
+
+        .tx-hash {
+            color: #4dabf7;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎰 Lottery AMM</h1>
+            <p>Create and manage lottery pools with price discovery</p>
+        </div>
+
+        <div class="wallet-info">
+            <div id="walletStatus">Connecting to wallet...</div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>Create New Pool</h2>
+                <div class="input-group">
+                    <label>Initial XNT Amount (tokens)</label>
+                    <input type="number" id="initialAmount" value="1000000" placeholder="e.g., 1000000">
+                </div>
+                <div class="input-group">
+                    <label>Registration Duration (slots)</label>
+                    <input type="number" id="regDuration" value="100" placeholder="e.g., 100">
+                </div>
+                <button class="btn" onclick="createPool()">Create Pool</button>
+            </div>
+
+            <div class="card">
+                <h2>Register for Lottery</h2>
+                <div class="input-group">
+                    <label>Pool Address</label>
+                    <input type="text" id="poolAddress" placeholder="Pool PDA">
+                </div>
+                <div class="input-group">
+                    <label>USDC Amount ($)</label>
+                    <input type="number" id="usdcAmount" value="100000" placeholder="e.g., 100000">
+                </div>
+                <button class="btn" onclick="registerUser()">Register</button>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>Settle Lottery</h2>
+                <div class="input-group">
+                    <label>Pool Address</label>
+                    <input type="text" id="settlePoolAddress" placeholder="Pool PDA">
+                </div>
+                <button class="btn" onclick="settleLottery()">Settle & Discover Price</button>
+            </div>
+
+            <div class="card">
+                <h2>Claim Tokens</h2>
+                <div class="input-group">
+                    <label>Pool Address</label>
+                    <input type="text" id="claimPoolAddress" placeholder="Pool PDA">
+                </div>
+                <button class="btn" onclick="claimTokens()">Claim</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Pool Status</h2>
+            <div class="input-group">
+                <label>Pool Address</label>
+                <input type="text" id="statusPoolAddress" placeholder="Pool PDA">
+            </div>
+            <button class="btn btn-secondary" onclick="getPoolStatus()">Get Status</button>
+            <div id="poolStatus"></div>
+        </div>
+
+        <div class="card">
+            <h2>Network</h2>
+            <div class="input-group">
+                <label>RPC Endpoint</label>
+                <select id="network" onchange="switchNetwork()">
+                    <option value="http://localhost:8899">Localhost (Test Validator)</option>
+                    <option value="https://rpc.testnet.x1.xyz">X1 Testnet</option>
+                </select>
+            </div>
+            <div class="status">
+                <h3>Connection Info</h3>
+                <div class="status-item">
+                    <label>Program ID:</label>
+                    <span id="programId">C8x5EWRYp1QMESFn3pPeNVEfCD6ecE4iziUbqjw6RNrG</span>
+                </div>
+                <div class="status-item">
+                    <label>Network:</label>
+                    <span id="networkStatus">Localhost</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Console Output</h2>
+            <div id="output"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        const { PublicKey, SystemProgram, Transaction, SYSVAR_RECENT_BLOCKHASHES_PUBKEY } = solanaWeb3;
+        const { AnchorProvider, Program, BN, web3 } = anchor;
+
+        const programId = new PublicKey('C8x5EWRYp1QMESFn3pPeNVEfCD6ecE4iziUbqjw6RNrG');
+        const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+        const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+
+        let connection;
+        let provider;
+        let program;
+        let wallet = null;
+
+        // IDL - Embedded from target/idl/lottery_amm.json
+        const IDL = {"address":"C8x5EWRYp1QMESFn3pPeNVEfCD6ecE4iziUbqjw6RNrG","metadata":{"name":"lottery_amm","version":"0.1.0","spec":"0.1.0","description":"Created with Anchor"},"instructions":[{"name":"claim","discriminator":[62,198,214,193,213,159,108,210],"accounts":[{"name":"lottery_pool","writable":true,"pda":{"seeds":[{"kind":"const","value":[108,111,116,116,101,114,121]},{"kind":"account","path":"lottery_pool.authority","account":"LotteryPool"}]}},{"name":"participant","writable":true,"pda":{"seeds":[{"kind":"const","value":[112,97,114,116,105,99,105,112,97,110,116]},{"kind":"account","path":"lottery_pool"},{"kind":"account","path":"user"}]}},{"name":"user","writable":true,"signer":true},{"name":"user_token_account","writable":true},{"name":"user_usdc_account","writable":true},{"name":"token_vault","writable":true},{"name":"usdc_vault","writable":true},{"name":"token_program","address":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"}],"args":[]},{"name":"initialize_lottery","discriminator":[113,199,243,247,73,217,33,11],"accounts":[{"name":"lottery_pool","writable":true,"pda":{"seeds":[{"kind":"const","value":[108,111,116,116,101,114,121]},{"kind":"account","path":"authority"}]}},{"name":"authority","writable":true,"signer":true},{"name":"depositor_token_account","writable":true},{"name":"token_vault","writable":true},{"name":"usdc_vault","writable":true},{"name":"token_program","address":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"},{"name":"system_program","address":"11111111111111111111111111111111"}],"args":[{"name":"initial_token_amount","type":"u64"},{"name":"registration_duration_slots","type":"u64"}]},{"name":"register","discriminator":[211,124,67,15,211,194,178,240],"accounts":[{"name":"lottery_pool","writable":true,"pda":{"seeds":[{"kind":"const","value":[108,111,116,116,101,114,121]},{"kind":"account","path":"lottery_pool.authority","account":"LotteryPool"}]}},{"name":"participant","writable":true,"pda":{"seeds":[{"kind":"const","value":[112,97,114,116,105,99,105,112,97,110,116]},{"kind":"account","path":"lottery_pool"},{"kind":"account","path":"user"}]}},{"name":"user","writable":true,"signer":true},{"name":"user_usdc_account","writable":true},{"name":"usdc_vault","writable":true},{"name":"token_program","address":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"},{"name":"system_program","address":"11111111111111111111111111111111"}],"args":[{"name":"usdc_amount","type":"u64"}]},{"name":"settle","discriminator":[175,42,185,87,144,131,102,212],"accounts":[{"name":"lottery_pool","writable":true,"pda":{"seeds":[{"kind":"const","value":[108,111,116,116,101,114,121]},{"kind":"account","path":"lottery_pool.authority","account":"LotteryPool"}]}},{"name":"usdc_vault","writable":true},{"name":"recent_blockhashes"}],"args":[]}],"accounts":[{"name":"LotteryPool","discriminator":[96,45,253,200,241,39,133,245]},{"name":"ParticipantEntry","discriminator":[212,156,59,227,2,97,82,90]}],"errors":[{"code":6000,"name":"RegistrationNotOpen","msg":"Registration period has not opened yet or has ended"},{"code":6001,"name":"RegistrationPeriodEnded","msg":"Registration period has ended"},{"code":6002,"name":"InvalidAmount","msg":"Invalid amount"},{"code":6003,"name":"SettlementSlotNotReached","msg":"Settlement slot has not been reached yet"},{"code":6004,"name":"AlreadySettled","msg":"Lottery has already been settled"},{"code":6005,"name":"LotteryNotSettled","msg":"Lottery has not been settled yet"},{"code":6006,"name":"AlreadyClaimed","msg":"User has already claimed their allocation"},{"code":6007,"name":"MaxPriceReached","msg":"Maximum price of $2.00 has been reached"}],"types":[{"name":"LotteryPool","type":{"kind":"struct","fields":[{"name":"liquidity","type":"u128"},{"name":"sqrt_price","type":"u128"},{"name":"token_vault","type":"pubkey"},{"name":"usdc_vault","type":"pubkey"},{"name":"authority","type":"pubkey"},{"name":"registration_start_slot","type":"u64"},{"name":"registration_end_slot","type":"u64"},{"name":"settlement_slot","type":"u64"},{"name":"total_participants","type":"u32"},{"name":"total_allocated_usdc","type":"u64"},{"name":"status","type":{"defined":{"name":"LotteryStatus"}}},{"name":"settlement_blockhash","type":{"array":["u8",32]}}]}},{"name":"LotteryStatus","type":{"kind":"enum","variants":[{"name":"Registration"},{"name":"Settled"},{"name":"Completed"}]}},{"name":"ParticipantEntry","type":{"kind":"struct","fields":[{"name":"user","type":"pubkey"},{"name":"requested_usdc","type":"u64"},{"name":"escrowed_usdc","type":"u64"},{"name":"lottery_number","type":"u64"},{"name":"allocated_usdc","type":"u64"},{"name":"tokens_received","type":"u64"},{"name":"claimed","type":"bool"},{"name":"registration_slot","type":"u64"}]}}]};
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const div = document.createElement('div');
+            const timestamp = new Date().toLocaleTimeString();
+            div.innerHTML = `[${timestamp}] ${message}`;
+            if (type === 'error') div.style.color = '#ff6b6b';
+            if (type === 'success') div.style.color = '#51cf66';
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        async function connectWallet() {
+            try {
+                if (!window.solana) {
+                    log('❌ Phantom wallet not found! Please install Phantom.', 'error');
+                    return false;
+                }
+
+                const resp = await window.solana.connect();
+                wallet = window.solana;
+                log('✅ Wallet connected: ' + resp.publicKey.toString(), 'success');
+
+                document.getElementById('walletStatus').innerHTML =
+                    `Wallet: <code>${resp.publicKey.toString().slice(0, 8)}...${resp.publicKey.toString().slice(-8)}</code>`;
+
+                return true;
+            } catch (err) {
+                log('❌ Wallet connection failed: ' + err.message, 'error');
+                return false;
+            }
+        }
+
+        async function init() {
+            try {
+                const network = document.getElementById('network').value;
+                connection = new web3.Connection(network, 'confirmed');
+
+                // Try to connect wallet
+                if (window.solana && window.solana.isConnected) {
+                    wallet = window.solana;
+                    provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+                    program = new Program(IDL, provider);
+
+                    log('✅ Connected to ' + network, 'success');
+                    log('✅ Wallet auto-connected', 'success');
+                    log('Program ID: ' + programId.toString());
+                } else {
+                    log('⚠️ Click any button to connect wallet', 'info');
+                    log('Program ID: ' + programId.toString());
+                }
+
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        }
+
+        function switchNetwork() {
+            const network = document.getElementById('network').value;
+            document.getElementById('networkStatus').textContent =
+                network.includes('localhost') ? 'Localhost' : 'X1 Testnet';
+            init();
+        }
+
+        function getAssociatedTokenAddress(mint, owner) {
+            const seeds = [
+                owner.toBuffer(),
+                TOKEN_PROGRAM_ID.toBuffer(),
+                mint.toBuffer(),
+            ];
+            const [address] = PublicKey.findProgramAddressSync(
+                seeds,
+                ASSOCIATED_TOKEN_PROGRAM_ID
+            );
+            return address;
+        }
+
+        window.createPool = async function() {
+            try {
+                if (!wallet || !wallet.isConnected) {
+                    const connected = await connectWallet();
+                    if (!connected) return;
+
+                    provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+                    program = new Program(IDL, provider);
+                }
+
+                log('🎰 Creating new lottery pool...');
+
+                const initialAmount = document.getElementById('initialAmount').value;
+                const regDuration = document.getElementById('regDuration').value;
+
+                log(`Initial Amount: ${initialAmount} tokens`);
+                log(`Registration Duration: ${regDuration} slots`);
+                log('');
+                log('⚠️ Note: You need to pre-create token vaults and fund them.');
+                log('⚠️ This requires XNT and USDC mints to be created first.');
+                log('');
+                log('For now, use the CLI scripts:');
+                log('  yarn test tests/simple-onchain.ts');
+                log('');
+
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        };
+
+        window.registerUser = async function() {
+            try {
+                if (!wallet || !wallet.isConnected) {
+                    const connected = await connectWallet();
+                    if (!connected) return;
+
+                    provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+                    program = new Program(IDL, provider);
+                }
+
+                log('👤 Registering for lottery...');
+
+                const poolAddress = document.getElementById('poolAddress').value;
+                const usdcAmount = document.getElementById('usdcAmount').value;
+
+                if (!poolAddress || !usdcAmount) {
+                    log('❌ Please enter pool address and USDC amount', 'error');
+                    return;
+                }
+
+                log('⚠️ Note: Registration requires USDC token account setup.');
+                log('⚠️ For now, use the CLI test scripts.');
+                log('');
+
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        };
+
+        window.settleLottery = async function() {
+            try {
+                if (!wallet || !wallet.isConnected) {
+                    const connected = await connectWallet();
+                    if (!connected) return;
+
+                    provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+                    program = new Program(IDL, provider);
+                }
+
+                log('⚖️ Settling lottery...');
+
+                const poolAddress = document.getElementById('settlePoolAddress').value;
+
+                if (!poolAddress) {
+                    log('❌ Please enter pool address', 'error');
+                    return;
+                }
+
+                const poolPubkey = new PublicKey(poolAddress);
+                const poolData = await program.account.lotteryPool.fetch(poolPubkey);
+
+                log('Fetching pool data...');
+                log('Settlement slot: ' + poolData.settlementSlot.toString());
+
+                const currentSlot = await connection.getSlot();
+                log('Current slot: ' + currentSlot);
+
+                if (currentSlot < poolData.settlementSlot.toNumber()) {
+                    const slotsRemaining = poolData.settlementSlot.toNumber() - currentSlot;
+                    log(`⚠️ Need to wait ${slotsRemaining} more slots`, 'error');
+                    log(`⏳ Estimated time: ~${(slotsRemaining * 0.4).toFixed(0)} seconds`);
+                    return;
+                }
+
+                log('Calling settle instruction...');
+
+                const tx = await program.methods
+                    .settle()
+                    .accounts({
+                        lotteryPool: poolPubkey,
+                        usdcVault: poolData.usdcVault,
+                        recentBlockhashes: SYSVAR_RECENT_BLOCKHASHES_PUBKEY,
+                    })
+                    .rpc();
+
+                log('✅ Lottery settled!', 'success');
+                log('📊 Transaction: ' + tx, 'success');
+
+                // Fetch updated pool data
+                const updatedPool = await program.account.lotteryPool.fetch(poolPubkey);
+                const sqrtPrice = updatedPool.sqrtPrice.toString();
+                const price = (BigInt(sqrtPrice) * BigInt(sqrtPrice)) / (BigInt(1_000_000_000) * BigInt(1_000_000_000));
+
+                log('📊 Clearing Price: $' + (Number(price) / 1_000_000_000).toFixed(6), 'success');
+
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        };
+
+        window.claimTokens = async function() {
+            try {
+                if (!wallet || !wallet.isConnected) {
+                    const connected = await connectWallet();
+                    if (!connected) return;
+
+                    provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+                    program = new Program(IDL, provider);
+                }
+
+                log('🎁 Claiming tokens...');
+
+                const poolAddress = document.getElementById('claimPoolAddress').value;
+
+                if (!poolAddress) {
+                    log('❌ Please enter pool address', 'error');
+                    return;
+                }
+
+                log('⚠️ Claim requires token accounts to be set up.');
+                log('⚠️ Use CLI test scripts for full flow.');
+
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        };
+
+        window.getPoolStatus = async function() {
+            try {
+                if (!connection) {
+                    await init();
+                }
+
+                const poolAddress = document.getElementById('statusPoolAddress').value;
+                if (!poolAddress) {
+                    log('❌ Please enter a pool address', 'error');
+                    return;
+                }
+
+                log('📊 Fetching pool status...');
+
+                if (!provider) {
+                    provider = new AnchorProvider(connection, { publicKey: PublicKey.default }, { commitment: 'confirmed' });
+                    program = new Program(IDL, provider);
+                }
+
+                const poolPubkey = new PublicKey(poolAddress);
+                const poolData = await program.account.lotteryPool.fetch(poolPubkey);
+
+                const statusDiv = document.getElementById('poolStatus');
+                const currentSlot = await connection.getSlot();
+
+                const statusText = poolData.status.registration ? 'Registration' :
+                                  poolData.status.settled ? 'Settled' : 'Completed';
+
+                const sqrtPrice = poolData.sqrtPrice.toString();
+                const price = (BigInt(sqrtPrice) * BigInt(sqrtPrice)) / (BigInt(1_000_000_000) * BigInt(1_000_000_000));
+
+                statusDiv.innerHTML = `
+                    <div class="status">
+                        <h3>Pool Information</h3>
+                        <div class="status-item">
+                            <label>Status:</label>
+                            <span>${statusText}</span>
+                        </div>
+                        <div class="status-item">
+                            <label>Authority:</label>
+                            <span>${poolData.authority.toString().slice(0, 20)}...</span>
+                        </div>
+                        <div class="status-item">
+                            <label>Current Price:</label>
+                            <span>$${(Number(price) / 1_000_000_000).toFixed(6)}</span>
+                        </div>
+                        <div class="status-item">
+                            <label>Total Participants:</label>
+                            <span>${poolData.totalParticipants}</span>
+                        </div>
+                        <div class="status-item">
+                            <label>Registration End Slot:</label>
+                            <span>${poolData.registrationEndSlot.toString()}</span>
+                        </div>
+                        <div class="status-item">
+                            <label>Settlement Slot:</label>
+                            <span>${poolData.settlementSlot.toString()}</span>
+                        </div>
+                        <div class="status-item">
+                            <label>Current Slot:</label>
+                            <span>${currentSlot}</span>
+                        </div>
+                    </div>
+                `;
+
+                log('✅ Pool status loaded', 'success');
+
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        };
+
+        // Initialize on load
+        window.onload = init;
+
+        log('🚀 Lottery AMM Interface Ready');
+        log('Program ID: C8x5EWRYp1QMESFn3pPeNVEfCD6ecE4iziUbqjw6RNrG');
+        log('');
+        log('📋 Recent Transaction Hashes:');
+        log('Initialize Pool: 31EnkYZRSVEc3vRr9JcgHNvuy8GjathYGxdRpk7JHZEv2gZJxGSVsDWTcH9hgVaL4xS5ZStLVs3jRwRiYFLiZrMm', 'success');
+        log('Register User: 3kd7UZ49QkRoJThp8DknpQm2CmNnZwibWYKuEXpYDVdoVh19ngSn5rR15ZymRiot3C3ryUiwpQRTmd9LNXvizn5y', 'success');
+        log('');
+        log('💡 Connect your Phantom wallet to interact with the program');
+    </script>
+</body>
+</html>
