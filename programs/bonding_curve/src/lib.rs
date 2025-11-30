@@ -56,9 +56,6 @@ pub mod bonding_curve {
     pub fn buy(ctx: Context<Buy>, usdc_amount: u64) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
 
-        // Check if trading is locked (pool graduated)
-        require!(!pool.is_graduated, ErrorCode::TradingLocked);
-
         // Calculate XNT output using constant product formula
         // k = x * y (constant)
         // new_usdc_reserve = usdc_reserve + usdc_amount
@@ -125,9 +122,6 @@ pub mod bonding_curve {
         pool.usdc_reserve = new_usdc_reserve as u64;
         pool.trade_count += 1;
 
-        // Check if pool has reached graduation
-        check_and_update_graduation(pool, &ctx.accounts.pool_xnt, &ctx.accounts.pool_usdc)?;
-
         Ok(())
     }
 
@@ -135,9 +129,6 @@ pub mod bonding_curve {
     /// Price decreases as XNT is sold
     pub fn sell(ctx: Context<Sell>, xnt_amount: u64) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
-
-        // Check if trading is locked (pool graduated)
-        require!(!pool.is_graduated, ErrorCode::TradingLocked);
 
         // Calculate USDC output using constant product formula
         // k = x * y (constant)
@@ -212,9 +203,6 @@ pub mod bonding_curve {
         pool.xnt_reserve = new_xnt_reserve as u64;
         pool.usdc_reserve = new_usdc_reserve as u64;
         pool.trade_count += 1;
-
-        // Check if pool has reached graduation
-        check_and_update_graduation(pool, &ctx.accounts.pool_xnt, &ctx.accounts.pool_usdc)?;
 
         Ok(())
     }
@@ -332,6 +320,175 @@ pub mod bonding_curve {
 
         let price_after = pool.usdc_reserve / pool.xnt_reserve;
         msg!("Price after: ${} (unchanged)", price_after);
+
+        Ok(())
+    }
+
+    /// Withdraw XNT from the pool (authority only)
+    /// Decreases XNT supply which INCREASES price
+    pub fn withdraw_xnt(ctx: Context<WithdrawXnt>, xnt_amount: u64) -> Result<()> {
+        let pool = &mut ctx.accounts.pool;
+
+        require!(
+            ctx.accounts.authority.key() == pool.authority,
+            ErrorCode::Unauthorized
+        );
+
+        require!(
+            pool.xnt_reserve >= xnt_amount,
+            ErrorCode::InsufficientLiquidity
+        );
+
+        let new_xnt_reserve = pool.xnt_reserve
+            .checked_sub(xnt_amount)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        require!(new_xnt_reserve > 0, ErrorCode::InsufficientLiquidity);
+
+        let new_k = (new_xnt_reserve as u128)
+            .checked_mul(pool.usdc_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        msg!("Withdrawing {} XNT from pool", xnt_amount);
+        msg!("Price increases: {} -> {}",
+            pool.usdc_reserve / pool.xnt_reserve,
+            pool.usdc_reserve / new_xnt_reserve);
+
+        // Transfer XNT from pool to authority using PDA authority
+        let seeds = &[
+            b"pool",
+            pool.xnt_mint.as_ref(),
+            pool.usdc_mint.as_ref(),
+            &[pool.bump],
+        ];
+        let signer = &[&seeds[..]];
+
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.pool_xnt.to_account_info(),
+            to: ctx.accounts.authority_xnt.to_account_info(),
+            authority: pool.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+        token::transfer(cpi_ctx, xnt_amount)?;
+
+        pool.xnt_reserve = new_xnt_reserve;
+        pool.k = new_k;
+
+        Ok(())
+    }
+
+    /// Withdraw XNT and proportional virtual USDC (price-neutral withdrawal)
+    /// Keeps price unchanged while reducing pool size
+    pub fn withdraw_xnt_price_neutral(
+        ctx: Context<WithdrawXnt>,
+        xnt_amount: u64,
+    ) -> Result<()> {
+        let pool = &mut ctx.accounts.pool;
+
+        require!(
+            ctx.accounts.authority.key() == pool.authority,
+            ErrorCode::Unauthorized
+        );
+
+        require!(
+            pool.xnt_reserve >= xnt_amount,
+            ErrorCode::InsufficientLiquidity
+        );
+
+        // Calculate proportional virtual USDC to remove to maintain price
+        // virtual_usdc_to_remove = (usdc_reserve × xnt_amount) / xnt_reserve
+        let virtual_usdc_to_remove = (pool.usdc_reserve as u128)
+            .checked_mul(xnt_amount as u128)
+            .ok_or(ErrorCode::MathOverflow)?
+            .checked_div(pool.xnt_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)? as u64;
+
+        let new_xnt_reserve = pool.xnt_reserve
+            .checked_sub(xnt_amount)
+            .ok_or(ErrorCode::MathOverflow)?;
+        let new_usdc_reserve = pool.usdc_reserve
+            .checked_sub(virtual_usdc_to_remove)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        require!(new_xnt_reserve > 0, ErrorCode::InsufficientLiquidity);
+        require!(new_usdc_reserve > 0, ErrorCode::InsufficientLiquidity);
+
+        let new_k = (new_xnt_reserve as u128)
+            .checked_mul(new_usdc_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        let price_before = pool.usdc_reserve / pool.xnt_reserve;
+        let price_after = new_usdc_reserve / new_xnt_reserve;
+
+        msg!("Withdrawing {} XNT + {} virtual USDC (price-neutral)", xnt_amount, virtual_usdc_to_remove);
+        msg!("Price maintained at ${}", price_before);
+
+        // Transfer XNT from pool to authority using PDA authority
+        let seeds = &[
+            b"pool",
+            pool.xnt_mint.as_ref(),
+            pool.usdc_mint.as_ref(),
+            &[pool.bump],
+        ];
+        let signer = &[&seeds[..]];
+
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.pool_xnt.to_account_info(),
+            to: ctx.accounts.authority_xnt.to_account_info(),
+            authority: pool.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+        token::transfer(cpi_ctx, xnt_amount)?;
+
+        pool.xnt_reserve = new_xnt_reserve;
+        pool.usdc_reserve = new_usdc_reserve;
+        pool.k = new_k;
+
+        msg!("Price after: ${} (unchanged)", price_after);
+
+        Ok(())
+    }
+
+    /// Withdraw USDC profits from pool (authority only)
+    /// Withdraws REAL USDC without changing virtual reserves or pricing
+    pub fn withdraw_usdc(ctx: Context<WithdrawUsdc>, usdc_amount: u64) -> Result<()> {
+        let pool = &mut ctx.accounts.pool;
+
+        require!(
+            ctx.accounts.authority.key() == pool.authority,
+            ErrorCode::Unauthorized
+        );
+
+        // Check REAL USDC balance (not virtual reserve)
+        let real_usdc = ctx.accounts.pool_usdc.amount;
+        require!(real_usdc >= usdc_amount, ErrorCode::InsufficientLiquidity);
+
+        msg!("Withdrawing {} USDC from pool", usdc_amount);
+
+        // Transfer USDC from pool to authority
+        let seeds = &[
+            b"pool",
+            pool.xnt_mint.as_ref(),
+            pool.usdc_mint.as_ref(),
+            &[pool.bump],
+        ];
+        let signer = &[&seeds[..]];
+
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.pool_usdc.to_account_info(),
+            to: ctx.accounts.authority_usdc.to_account_info(),
+            authority: pool.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            cpi_accounts,
+            signer
+        );
+        token::transfer(cpi_ctx, usdc_amount)?;
+
+        // DO NOT update pool.usdc_reserve - keep virtual for pricing
 
         Ok(())
     }
@@ -467,47 +624,10 @@ pub mod bonding_curve {
     }
 }
 
-/// Check if pool has reached graduation (XNT and USDC balances equal within 5% tolerance)
-/// and update is_graduated flag if so
-fn check_and_update_graduation(
-    pool: &mut Pool,
-    pool_xnt_account: &Account<TokenAccount>,
-    pool_usdc_account: &Account<TokenAccount>,
-) -> Result<()> {
-    // Skip if already graduated
-    if pool.is_graduated {
-        return Ok(());
-    }
-
-    // Get real token balances
-    let real_xnt = pool_xnt_account.amount as u128;
-    let real_usdc = pool_usdc_account.amount as u128;
-
-    // Calculate the ratio between the two balances
-    // We want them to be approximately equal (within 5% tolerance)
-    let larger = real_xnt.max(real_usdc);
-    let smaller = real_xnt.min(real_usdc);
-
-    // If smaller is 0, we can't have equal balances yet
-    if smaller == 0 {
-        return Ok(());
-    }
-
-    // Calculate percentage difference: ((larger - smaller) / larger) * 100
-    // If this is <= 5%, the balances are within 5% of each other
-    let difference_pct = ((larger - smaller) * 100) / larger;
-
-    // Check if balances are within 5% of each other (95-105% ratio)
-    if difference_pct <= 5 {
-        pool.is_graduated = true;
-        msg!("🎓 POOL GRADUATED! Trading locked.");
-        msg!("Real XNT: {} | Real USDC: {}", real_xnt, real_usdc);
-        msg!("Balances are equal within {}% tolerance", difference_pct);
-        msg!("Pool can now be migrated to DEX");
-    }
-
-    Ok(())
-}
+// Graduation logic REMOVED for price corridor bot strategy
+// The is_graduated field is kept in Pool struct to maintain compatibility
+// but is no longer used. Continuous trading is now enabled with price management
+// through withdraw_xnt and deposit_xnt instructions.
 
 #[derive(Accounts)]
 pub struct InitializePool<'info> {
@@ -657,6 +777,56 @@ pub struct DepositXnt<'info> {
 }
 
 #[derive(Accounts)]
+pub struct WithdrawXnt<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"pool", pool.xnt_mint.as_ref(), pool.usdc_mint.as_ref()],
+        bump = pool.bump,
+        constraint = authority.key() == pool.authority @ ErrorCode::Unauthorized
+    )]
+    pub pool: Account<'info, Pool>,
+
+    #[account(
+        mut,
+        constraint = pool_xnt.key() == pool.pool_xnt
+    )]
+    pub pool_xnt: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub authority_xnt: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawUsdc<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"pool", pool.xnt_mint.as_ref(), pool.usdc_mint.as_ref()],
+        bump = pool.bump,
+        constraint = authority.key() == pool.authority @ ErrorCode::Unauthorized
+    )]
+    pub pool: Account<'info, Pool>,
+
+    #[account(
+        mut,
+        constraint = pool_usdc.key() == pool.pool_usdc
+    )]
+    pub pool_usdc: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub authority_usdc: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 pub struct AddLiquidity<'info> {
     #[account(mut)]
     pub lp_provider: Signer<'info>,
@@ -722,7 +892,7 @@ pub struct Pool {
     pub k: u128,              // Constant product
     pub trade_count: u64,
     pub total_liquidity: u64, // Total LP tokens issued
-    pub is_graduated: bool,   // Trading locked when pool reaches 50/50 balance
+    pub is_graduated: bool,   // DEPRECATED: Kept for compatibility, not used in price corridor strategy
     pub bump: u8,
 }
 
