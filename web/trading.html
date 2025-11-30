@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XNT Trading Terminal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0e27;
+            color: #00ff41;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px;
+            border: 2px solid #00ff41;
+            margin-bottom: 20px;
+            background: rgba(0, 255, 65, 0.05);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            border: 2px solid #00ff41;
+            padding: 20px;
+            background: rgba(0, 255, 65, 0.02);
+        }
+
+        .panel h2 {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #00ff41;
+            font-size: 1.3em;
+        }
+
+        .wallet-info {
+            background: rgba(0, 255, 65, 0.1);
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 3px solid #00ff41;
+        }
+
+        .wallet-info .label {
+            color: #00ffff;
+            font-size: 0.9em;
+        }
+
+        .wallet-info .value {
+            font-size: 1.2em;
+            margin-top: 5px;
+            word-break: break-all;
+        }
+
+        .balance-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .balance-item {
+            background: rgba(0, 255, 65, 0.1);
+            padding: 15px;
+            text-align: center;
+            border: 1px solid #00ff41;
+        }
+
+        .balance-item .label {
+            color: #00ffff;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .balance-item .amount {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .price-display {
+            background: rgba(0, 255, 65, 0.1);
+            padding: 20px;
+            text-align: center;
+            margin: 15px 0;
+            border: 2px solid #00ff41;
+        }
+
+        .price-display .current-price {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #00ff41;
+        }
+
+        .price-display .price-label {
+            color: #00ffff;
+            margin-bottom: 10px;
+        }
+
+        .price-range {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #00ff41;
+        }
+
+        .price-range span {
+            color: #00ffff;
+        }
+
+        .trade-form {
+            margin-top: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #00ffff;
+            font-size: 0.95em;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 255, 65, 0.05);
+            border: 2px solid #00ff41;
+            color: #00ff41;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            background: rgba(0, 255, 65, 0.1);
+        }
+
+        .quote-display {
+            background: rgba(0, 255, 65, 0.1);
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 3px solid #00ffff;
+        }
+
+        .quote-display .quote-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+        }
+
+        .quote-display .quote-label {
+            color: #00ffff;
+        }
+
+        .quote-display .quote-value {
+            color: #00ff41;
+            font-weight: bold;
+        }
+
+        .btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: 2px solid;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-buy {
+            background: rgba(0, 255, 255, 0.1);
+            border-color: #00ffff;
+            color: #00ffff;
+        }
+
+        .btn-buy:hover:not(:disabled) {
+            background: rgba(0, 255, 255, 0.3);
+        }
+
+        .btn-sell {
+            background: rgba(255, 0, 0, 0.1);
+            border-color: #ff0040;
+            color: #ff0040;
+        }
+
+        .btn-sell:hover:not(:disabled) {
+            background: rgba(255, 0, 0, 0.3);
+        }
+
+        .btn-primary {
+            background: rgba(0, 255, 65, 0.1);
+            border-color: #00ff41;
+            color: #00ff41;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: rgba(0, 255, 65, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 165, 0, 0.1);
+            border-color: #ffa500;
+            color: #ffa500;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: rgba(255, 165, 0, 0.3);
+        }
+
+        .btn-full {
+            grid-column: 1 / -1;
+        }
+
+        .status {
+            padding: 12px;
+            margin: 15px 0;
+            border-left: 3px solid;
+            font-size: 0.95em;
+        }
+
+        .status.success {
+            background: rgba(0, 255, 65, 0.1);
+            border-color: #00ff41;
+            color: #00ff41;
+        }
+
+        .status.error {
+            background: rgba(255, 0, 0, 0.1);
+            border-color: #ff0040;
+            color: #ff0040;
+        }
+
+        .status.info {
+            background: rgba(0, 255, 255, 0.1);
+            border-color: #00ffff;
+            color: #00ffff;
+        }
+
+        .trade-history {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .trade-item {
+            padding: 10px;
+            margin: 8px 0;
+            border-left: 3px solid;
+            background: rgba(0, 255, 65, 0.05);
+            font-size: 0.9em;
+        }
+
+        .trade-item.buy {
+            border-color: #00ffff;
+        }
+
+        .trade-item.sell {
+            border-color: #ff0040;
+        }
+
+        .trade-item .trade-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .trade-item .trade-type {
+            font-weight: bold;
+        }
+
+        .trade-item.buy .trade-type {
+            color: #00ffff;
+        }
+
+        .trade-item.sell .trade-type {
+            color: #ff0040;
+        }
+
+        .trade-item .trade-time {
+            color: #888;
+            font-size: 0.85em;
+        }
+
+        .quick-amounts {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .quick-amount-btn {
+            padding: 8px;
+            font-size: 0.9em;
+            background: rgba(0, 255, 65, 0.05);
+            border: 1px solid #00ff41;
+            color: #00ff41;
+            cursor: pointer;
+        }
+
+        .quick-amount-btn:hover {
+            background: rgba(0, 255, 65, 0.15);
+        }
+
+        .loading {
+            display: inline-block;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .position-summary {
+            background: rgba(0, 255, 65, 0.1);
+            padding: 15px;
+            margin: 15px 0;
+            border: 2px solid #00ff41;
+        }
+
+        .position-summary .position-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            padding: 5px 0;
+        }
+
+        .position-summary .position-label {
+            color: #00ffff;
+        }
+
+        .position-summary .position-value {
+            color: #00ff41;
+            font-weight: bold;
+        }
+
+        .position-summary .position-value.positive {
+            color: #00ff41;
+        }
+
+        .position-summary .position-value.negative {
+            color: #ff0040;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ XNT TRADING TERMINAL ⚡</h1>
+            <p>Live Bonding Curve Trading | $1.00 - $2.00 Corridor</p>
+        </div>
+
+        <div class="grid">
+            <!-- Left Column: Wallet & Position -->
+            <div class="panel">
+                <h2>💼 WALLET & POSITION</h2>
+
+                <div class="wallet-section" id="walletSection">
+                    <div id="noWallet">
+                        <p style="margin-bottom: 15px; color: #00ffff;">No wallet found. Create a new wallet to start trading.</p>
+                        <button class="btn-primary btn-full" onclick="createWallet()">Create New Wallet</button>
+                    </div>
+
+                    <div id="hasWallet" style="display: none;">
+                        <div class="wallet-info">
+                            <div class="label">WALLET ADDRESS:</div>
+                            <div class="value" id="walletAddress">-</div>
+                        </div>
+
+                        <div class="balance-grid">
+                            <div class="balance-item">
+                                <div class="label">USDC BALANCE</div>
+                                <div class="amount" id="usdcBalance">0</div>
+                            </div>
+                            <div class="balance-item">
+                                <div class="label">XNT BALANCE</div>
+                                <div class="amount" id="xntBalance">0</div>
+                            </div>
+                        </div>
+
+                        <div class="balance-grid" style="margin-top: 15px;">
+                            <div class="balance-item" style="background: rgba(0, 255, 255, 0.05);">
+                                <div class="label">USDC IN POOL (Virtual)</div>
+                                <div class="amount" id="poolUsdcReserve" style="color: #00ffff;">0</div>
+                            </div>
+                            <div class="balance-item" style="background: rgba(0, 255, 255, 0.05);">
+                                <div class="label">XNT IN POOL</div>
+                                <div class="amount" id="poolXntReserve" style="color: #00ffff;">0</div>
+                            </div>
+                        </div>
+
+                        <div class="balance-grid" style="margin-top: 10px;">
+                            <div class="balance-item" style="background: rgba(0, 255, 65, 0.1); border: 1px solid #00ff41;">
+                                <div class="label">REAL USDC IN POOL</div>
+                                <div class="amount" id="poolRealUsdcReserve" style="color: #00ff41; font-size: 1.3em;">0</div>
+                            </div>
+                            <div class="balance-item" style="background: rgba(0, 255, 65, 0.05);">
+                                <div class="label">VIRTUAL USDC</div>
+                                <div class="amount" id="poolVirtualUsdc" style="color: #888; font-size: 1.1em;">0</div>
+                            </div>
+                        </div>
+
+                        <div class="status info" style="margin: 15px 0;">
+                            💡 For trading and USDC airdrop, use the CLI trader:<br>
+                            <code style="font-size: 0.85em; display: block; margin-top: 5px;">
+                                npx ts-node scripts/interactive-trader.ts --pool=41BtpyzrYMGoM3ivFkw5ZiaEurSc4HBW1fdBKzQYuJ63
+                            </code>
+                        </div>
+
+                        <div class="position-summary">
+                            <h3 style="margin-bottom: 10px; color: #00ffff;">Position Summary</h3>
+                            <div class="position-item">
+                                <span class="position-label">XNT Value (USDC):</span>
+                                <span class="position-value" id="xntValueUSDC">$0</span>
+                            </div>
+                            <div class="position-item">
+                                <span class="position-label">Total Portfolio:</span>
+                                <span class="position-value" id="totalPortfolio">$0</span>
+                            </div>
+                            <div class="position-item">
+                                <span class="position-label">Avg Entry Price:</span>
+                                <span class="position-value" id="avgEntryPrice">-</span>
+                            </div>
+                            <div class="position-item">
+                                <span class="position-label">P&L:</span>
+                                <span class="position-value" id="pnl">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="statusMessages"></div>
+            </div>
+
+            <!-- Right Column: Market Data & Trading -->
+            <div class="panel">
+                <h2>📊 MARKET & TRADING</h2>
+
+                <div class="price-display">
+                    <div class="price-label">CURRENT XNT PRICE</div>
+                    <div class="current-price" id="currentPrice">$1.0000</div>
+                    <div class="price-range">
+                        <span>Floor: $1.00</span>
+                        <span>Ceiling: $2.00</span>
+                    </div>
+                </div>
+
+                <div class="trade-form">
+                    <div class="form-group">
+                        <label>TRADE AMOUNT (USDC):</label>
+                        <input type="number" id="tradeAmount" placeholder="Enter USDC amount" min="0" step="1000" value="10000" oninput="updateQuote()">
+                        <div class="quick-amounts">
+                            <button class="quick-amount-btn" onclick="setAmount(5000)">5K</button>
+                            <button class="quick-amount-btn" onclick="setAmount(10000)">10K</button>
+                            <button class="quick-amount-btn" onclick="setAmount(25000)">25K</button>
+                            <button class="quick-amount-btn" onclick="setAmount(50000)">50K</button>
+                        </div>
+                    </div>
+
+                    <div class="quote-display" id="quoteDisplay" style="display: none;">
+                        <h3 style="margin-bottom: 10px; color: #00ffff;">Quote Preview</h3>
+                        <div class="quote-item">
+                            <span class="quote-label">You Pay:</span>
+                            <span class="quote-value" id="quotePay">-</span>
+                        </div>
+                        <div class="quote-item">
+                            <span class="quote-label">You Receive:</span>
+                            <span class="quote-value" id="quoteReceive">-</span>
+                        </div>
+                        <div class="quote-item">
+                            <span class="quote-label">Effective Price:</span>
+                            <span class="quote-value" id="quotePrice">-</span>
+                        </div>
+                        <div class="quote-item">
+                            <span class="quote-label">Price Impact:</span>
+                            <span class="quote-value" id="quotePriceImpact">-</span>
+                        </div>
+                        <div class="quote-item">
+                            <span class="quote-label">New Pool Price:</span>
+                            <span class="quote-value" id="quoteNewPrice">-</span>
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn-buy" onclick="executeBuy()" id="buyBtn" disabled>
+                            BUY XNT
+                        </button>
+                        <button class="btn-sell" onclick="executeSell()" id="sellBtn" disabled>
+                            SELL XNT
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trade History -->
+        <div class="panel">
+            <h2>📜 TRADE HISTORY</h2>
+            <div class="trade-history" id="tradeHistory">
+                <p style="color: #888; text-align: center; padding: 20px;">No trades yet. Start trading to see your history here.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="trading-app.js"></script>
+</body>
+</html>

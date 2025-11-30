@@ -27,7 +27,7 @@ const rpcUrl = process.env.ANCHOR_PROVIDER_URL || "http://localhost:8899";
 
 // Trade configuration - continuous small buys to watch bot react
 const NUM_TRADES = 1000; // Run continuously
-const BUY_AMOUNT = 100_000_000_000; // Fixed 100K USDC per trade
+const BUY_AMOUNT = 10_000_000_000; // Fixed 10K USDC per trade (reduced 10x)
 const DELAY_MS = 3000; // 3 seconds between trades
 
 function randomBuyAmount(): number {
