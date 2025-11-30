@@ -35,6 +35,12 @@ const CONFIG = {
   MAX_PRICE_CHANGE_PERCENT: 0.03, // Cap price change at 3% per intervention
   MIN_INTERVENTION_AMOUNT: 1000_000, // Minimum 1 XNT to prevent micro-interventions
 
+  // Adaptive momentum settings
+  MOMENTUM_WINDOW_SIZE: 10,    // Number of price samples to track for momentum
+  MOMENTUM_MIN_MULTIPLIER: 1.0, // Minimum intervention size multiplier (low momentum)
+  MOMENTUM_MAX_MULTIPLIER: 2.0, // Maximum intervention size multiplier (high momentum)
+  MOMENTUM_THRESHOLD: 0.01,    // 1% price change per second = high momentum
+
   // Bot reserves (starting XNT balance for interventions)
   BOT_RESERVE_XNT: 100_000_000_000_000, // 100M XNT (10x more ammunition)
 
@@ -73,6 +79,7 @@ class PriceCorridorBot {
   private state: BotState;
   private isRunning: boolean;
   private previousState: PoolState | null = null;
+  private priceHistory: Array<{price: number, timestamp: number}> = [];
 
   // Pool accounts
   private poolXnt: PublicKey | null = null;
@@ -172,6 +179,7 @@ class PriceCorridorBot {
     console.log(`  📊 Soft Low:          $${CONFIG.SOFT_LOW.toFixed(2)} (intervention starts)`);
     console.log(``);
     console.log(`  📉 Max Price Change:  ${(CONFIG.MAX_PRICE_CHANGE_PERCENT * 100).toFixed(0)}% per intervention`);
+    console.log(`  🎯 Adaptive Momentum: ${CONFIG.MOMENTUM_MIN_MULTIPLIER}x - ${CONFIG.MOMENTUM_MAX_MULTIPLIER}x (based on price velocity)`);
     console.log(`  💪 Bot Reserve:       ${(CONFIG.BOT_RESERVE_XNT / 1e12).toFixed(0)}M XNT`);
     console.log(`  ⏱️  Poll Interval:     ${CONFIG.POLL_INTERVAL_MS}ms`);
     console.log("");
@@ -214,6 +222,54 @@ class PriceCorridorBot {
     const delta = targetXntReserve - currentState.xntReserve;
 
     return delta;
+  }
+
+  // Calculate price momentum (price change per second)
+  calculatePriceMomentum(): number {
+    if (this.priceHistory.length < 2) {
+      return 0; // Not enough data
+    }
+
+    // Calculate velocity using oldest and newest prices
+    const oldest = this.priceHistory[0];
+    const newest = this.priceHistory[this.priceHistory.length - 1];
+    const timeDeltaSeconds = (newest.timestamp - oldest.timestamp) / 1000;
+
+    if (timeDeltaSeconds === 0) {
+      return 0;
+    }
+
+    const priceDelta = newest.price - oldest.price;
+    const velocity = priceDelta / timeDeltaSeconds; // $/second
+
+    return velocity;
+  }
+
+  // Get adaptive multiplier based on momentum
+  // Returns 1.0x (low momentum) to 2.0x (high momentum)
+  getMomentumMultiplier(price: number): number {
+    const momentum = this.calculatePriceMomentum();
+    const absMomentum = Math.abs(momentum);
+
+    // Linear scaling from min to max multiplier based on momentum
+    // momentum = 0 → 1.0x
+    // momentum = THRESHOLD or above → 2.0x
+    const scaleFactor = Math.min(absMomentum / CONFIG.MOMENTUM_THRESHOLD, 1.0);
+    const multiplier = CONFIG.MOMENTUM_MIN_MULTIPLIER +
+                      (scaleFactor * (CONFIG.MOMENTUM_MAX_MULTIPLIER - CONFIG.MOMENTUM_MIN_MULTIPLIER));
+
+    return multiplier;
+  }
+
+  // Update price history with latest price
+  updatePriceHistory(price: number): void {
+    const now = Date.now();
+    this.priceHistory.push({ price, timestamp: now });
+
+    // Keep only the most recent N samples
+    if (this.priceHistory.length > CONFIG.MOMENTUM_WINDOW_SIZE) {
+      this.priceHistory.shift();
+    }
   }
 
   // Inject XNT into pool (lowers price)
@@ -289,6 +345,9 @@ class PriceCorridorBot {
     const state = await this.getPoolState();
     const price = state.price;
 
+    // Update price history for momentum calculation
+    this.updatePriceHistory(price);
+
     // Detect regular trades by comparing with previous state
     if (this.previousState !== null && state.tradeCount > this.previousState.tradeCount) {
       // A trade occurred - determine if it was BUY or SELL
@@ -355,9 +414,12 @@ class PriceCorridorBot {
     }
 
     if (interventionNeeded) {
-      // Calculate full delta to target, then apply move percentage
+      // Calculate full delta to target, then apply move percentage with momentum multiplier
       const fullDelta = this.calculateXntDelta(state, targetPrice);
-      const adjustedDelta = fullDelta * movePercent;
+      const momentum = this.calculatePriceMomentum();
+      const momentumMultiplier = this.getMomentumMultiplier(price);
+      const adaptiveMovePercent = movePercent * momentumMultiplier;
+      const adjustedDelta = fullDelta * adaptiveMovePercent;
 
       // Calculate maximum delta that would cause exactly MAX_PRICE_CHANGE_PERCENT price change
       // For price decrease (inject XNT): max_delta = X * change / (1 - change)
@@ -383,6 +445,7 @@ class PriceCorridorBot {
 
       // Execute intervention and log in single colored line
       const timestampAction = new Date().toISOString();
+      const momentumStr = momentumMultiplier > 1.1 ? ` [M${momentumMultiplier.toFixed(2)}x]` : '';
 
       if (cappedDelta > 0) {
         // Inject XNT (B.BUY) - adds XNT to push price down
@@ -391,7 +454,7 @@ class PriceCorridorBot {
         const actualPriceChange = ((newState.price / price - 1) * 100);
 
         // Green for successful intervention (ceiling defense)
-        console.log(`\x1b[32m[${timestampAction}] DEPOSIT | Price: $${newState.price.toFixed(6)} | XNT: ${(newState.xntReserve / 1e6).toLocaleString()} | USDC: $${(newState.realUsdc / 1e6).toLocaleString()} | Bot +${(cappedDelta / 1e6).toFixed(2)} XNT (${actualPriceChange.toFixed(2)}%)\x1b[0m`);
+        console.log(`\x1b[32m[${timestampAction}] DEPOSIT | Price: $${newState.price.toFixed(6)} | XNT: ${(newState.xntReserve / 1e6).toLocaleString()} | USDC: $${(newState.realUsdc / 1e6).toLocaleString()} | Bot +${(cappedDelta / 1e6).toFixed(2)} XNT (${actualPriceChange.toFixed(2)}%)${momentumStr}\x1b[0m`);
       } else {
         // Withdraw XNT (B.SELL) - removes XNT to push price up
         await this.withdrawXnt(-cappedDelta, reason);
@@ -399,7 +462,7 @@ class PriceCorridorBot {
         const actualPriceChange = ((newState.price / price - 1) * 100);
 
         // Yellow for successful intervention (floor defense)
-        console.log(`\x1b[33m[${timestampAction}] REMOVE | Price: $${newState.price.toFixed(6)} | XNT: ${(newState.xntReserve / 1e6).toLocaleString()} | USDC: $${(newState.realUsdc / 1e6).toLocaleString()} | Bot -${(-cappedDelta / 1e6).toFixed(2)} XNT (${actualPriceChange.toFixed(2)}%)\x1b[0m`);
+        console.log(`\x1b[33m[${timestampAction}] REMOVE | Price: $${newState.price.toFixed(6)} | XNT: ${(newState.xntReserve / 1e6).toLocaleString()} | USDC: $${(newState.realUsdc / 1e6).toLocaleString()} | Bot -${(-cappedDelta / 1e6).toFixed(2)} XNT (${actualPriceChange.toFixed(2)}%)${momentumStr}\x1b[0m`);
       }
     }
   }
