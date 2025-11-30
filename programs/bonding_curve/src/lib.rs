@@ -14,6 +14,7 @@ pub mod bonding_curve {
         ctx: Context<InitializePool>,
         xnt_amount: u64,
         virtual_usdc_amount: u64,
+        price_floor_enabled: bool,
     ) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
 
@@ -41,6 +42,7 @@ pub mod bonding_curve {
         pool.trade_count = 0;
         pool.total_liquidity = 0;
         pool.is_graduated = false; // Trading enabled initially
+        pool.price_floor_enabled = price_floor_enabled; // Set price floor flag
         pool.bump = ctx.bumps.pool;
 
         msg!("Pool initialized with {} XNT (single-sided)", xnt_amount);
@@ -155,12 +157,14 @@ pub mod bonding_curve {
 
         require!(usdc_out > 0, ErrorCode::ZeroOutput);
 
-        // Check that price won't drop below $1.00
+        // Check that price won't drop below $1.00 (if floor enabled)
         // Price = USDC / XNT, so for price >= 1.0, USDC >= XNT
-        require!(
-            new_usdc_reserve >= new_xnt_reserve,
-            ErrorCode::PriceBelowMinimum
-        );
+        if pool.price_floor_enabled {
+            require!(
+                new_usdc_reserve >= new_xnt_reserve,
+                ErrorCode::PriceBelowMinimum
+            );
+        }
 
         // Calculate effective price
         let price_before = pool.usdc_reserve / pool.xnt_reserve;
@@ -222,12 +226,14 @@ pub mod bonding_curve {
             .checked_add(xnt_amount as u128)
             .ok_or(ErrorCode::MathOverflow)? as u64;
 
-        // Check that price won't drop below $1.00
+        // Check that price won't drop below $1.00 (if floor enabled)
         // Price = USDC / XNT, so for price >= 1.0, USDC >= XNT
-        require!(
-            pool.usdc_reserve >= new_xnt_reserve,
-            ErrorCode::PriceBelowMinimum
-        );
+        if pool.price_floor_enabled {
+            require!(
+                pool.usdc_reserve >= new_xnt_reserve,
+                ErrorCode::PriceBelowMinimum
+            );
+        }
 
         // USDC reserve stays the same, so price decreases
         // Update constant k with new reserves
@@ -893,6 +899,7 @@ pub struct Pool {
     pub trade_count: u64,
     pub total_liquidity: u64, // Total LP tokens issued
     pub is_graduated: bool,   // DEPRECATED: Kept for compatibility, not used in price corridor strategy
+    pub price_floor_enabled: bool, // Enable/disable $1.00 price floor protection
     pub bump: u8,
 }
 

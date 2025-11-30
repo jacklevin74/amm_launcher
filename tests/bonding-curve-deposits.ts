@@ -106,7 +106,7 @@ describe("bonding-curve-deposits", () => {
     poolUsdc = poolUsdcKeypair.publicKey;
 
     await program.methods
-      .initializePool(new anchor.BN(INITIAL_XNT), new anchor.BN(VIRTUAL_USDC))
+      .initializePool(new anchor.BN(INITIAL_XNT), new anchor.BN(VIRTUAL_USDC), false)
       .accounts({
         initializer: payer.publicKey,
         pool: poolPda,
