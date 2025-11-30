@@ -21,6 +21,31 @@ The bot continuously monitors the pool price and intervenes when:
 
 ## 🚀 Quick Start
 
+### 0. Local Demonstration (Recommended First Step)
+
+Run the automated demonstration on local test validator to see the bot in action:
+
+```bash
+# Start local test validator (if not already running)
+./run-tests.sh
+
+# In another terminal, run the demonstration
+ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json \
+npx ts-mocha -p ./tsconfig.json -t 1000000 tests/price-corridor-demo.ts
+```
+
+This will:
+1. Create a pool with 10M XNT at $1.00
+2. Simulate 3 market scenarios (upward pressure, ceiling breach, downward pressure)
+3. Demonstrate bot interventions at soft and hard boundaries
+4. Show complete statistics and final results
+
+**Example output:**
+- ✅ Gentle intervention when price hits $1.90 (soft high)
+- ✅ Aggressive intervention when price hits $2.00 (ceiling)
+- ✅ XNT withdrawal when price drops to $1.10 (soft low)
+- ✅ Final price maintained within $1.00-$2.00 corridor
+
 ### 1. Run the Bot
 
 ```bash
