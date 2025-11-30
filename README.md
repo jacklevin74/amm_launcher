@@ -339,6 +339,63 @@ lottery_amm
 - Secondary market integration
 - Cross-chain lottery bridges
 
+## Virtual Liquidity Mechanics
+
+### How Virtual USDC Works
+
+The bonding curve uses **virtual liquidity** to bootstrap the pool with single-sided liquidity (XNT only). This is a key innovation that allows price discovery without requiring paired USDC deposits upfront.
+
+**Core Concept:**
+```rust
+// Pool stores TOTAL virtual USDC
+pool.usdc_reserve = real_usdc + virtual_boost
+
+// The virtual_boost is CONSTANT after initialization
+virtual_boost = initial_virtual_usdc - initial_real_usdc
+```
+
+**Example:**
+```
+Pool Initialization:
+  Real XNT:     5,000,000 XNT
+  Real USDC:    $0
+  Virtual USDC: $5,000,000  (for price calculation)
+  Starting price: $1.00
+
+After first trade (+$100K USDC):
+  Real XNT:     4,900,000 XNT
+  Real USDC:    $100,000
+  Virtual USDC: $5,100,000  (= $100K + $5M boost)
+  Virtual boost: $5,000,000 (CONSTANT)
+  Price: $1.04
+```
+
+**Why Both Increase:**
+- AMM formula uses: `k = xnt_reserve × usdc_reserve`
+- When user deposits $100K USDC:
+  - Real USDC: +$100K (actual tokens transferred)
+  - Virtual USDC: +$100K (used in price formula)
+  - The virtual boost remains constant at $5M
+
+**Implementation in Smart Contract:**
+```rust
+// lib.rs:65-66
+let new_usdc_reserve = (pool.usdc_reserve as u128)
+    .checked_add(usdc_amount as u128)  // Adds to virtual reserve
+```
+
+**Important:**
+- Virtual USDC is NOT phantom/fake liquidity
+- It's a mathematical offset used in the constant product formula
+- Real USDC always equals the actual token account balance
+- Virtual boost = Initial offset to create starting price
+
+This mechanism enables:
+- ✅ Single-sided liquidity bootstrapping (launch with XNT only)
+- ✅ Predictable starting price ($1.00)
+- ✅ Smooth price discovery as real USDC flows in
+- ✅ No initial paired USDC requirement
+
 ## Technical Details
 
 **Language:** Rust with Anchor Framework v0.32.1

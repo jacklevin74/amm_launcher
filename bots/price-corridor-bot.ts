@@ -22,18 +22,18 @@ import fs from "fs";
 // ========== CONFIGURATION ==========
 const CONFIG = {
   // Price corridor boundaries
-  PRICE_FLOOR: 1.0,           // Minimum price (hard floor)
   PRICE_CEILING: 2.0,          // Maximum price (hard ceiling)
-  PRICE_TARGET: 1.5,           // Target price for interventions
-  SOFT_LOW: 1.1,               // Soft lower boundary (gentle intervention)
-  SOFT_HIGH: 1.9,              // Soft upper boundary (gentle intervention)
+  AGGRESSIVE_TARGET: 1.96,     // Target 2% below ceiling for aggressive defense
+  SOFT_HIGH: 1.85,             // Start gentle intervention when approaching ceiling
 
   // Intervention settings
   AGGRESSIVE_PERCENT: 1.0,     // Move 100% to target on ceiling/floor breach
   GENTLE_PERCENT: 0.5,         // Move 50% to target on soft boundary breach
+  MAX_PRICE_CHANGE_PERCENT: 0.03, // Cap price change at 3% per intervention
+  MIN_INTERVENTION_AMOUNT: 1000_000, // Minimum 1 XNT to prevent micro-interventions
 
   // Bot reserves (starting XNT balance for interventions)
-  BOT_RESERVE_XNT: 10_000_000_000_000, // 10M XNT
+  BOT_RESERVE_XNT: 100_000_000_000_000, // 100M XNT (10x more ammunition)
 
   // Monitoring
   POLL_INTERVAL_MS: 5000,      // Check price every 5 seconds
@@ -156,16 +156,14 @@ class PriceCorridorBot {
   // Display bot configuration
   private displayConfig(): void {
     console.log("╔════════════════════════════════════════════════════════════╗");
-    console.log("║              PRICE CORRIDOR CONFIGURATION                 ║");
+    console.log("║         AGGRESSIVE PRICE CEILING DEFENSE BOT              ║");
     console.log("╚════════════════════════════════════════════════════════════╝");
-    console.log(`  💵 Price Floor:       $${CONFIG.PRICE_FLOOR.toFixed(2)}`);
-    console.log(`  📊 Soft Low:          $${CONFIG.SOFT_LOW.toFixed(2)}`);
-    console.log(`  🎯 Target Price:      $${CONFIG.PRICE_TARGET.toFixed(2)}`);
-    console.log(`  📊 Soft High:         $${CONFIG.SOFT_HIGH.toFixed(2)}`);
-    console.log(`  💵 Price Ceiling:     $${CONFIG.PRICE_CEILING.toFixed(2)}`);
+    console.log(`  💵 Price Ceiling:     $${CONFIG.PRICE_CEILING.toFixed(2)} (hard limit)`);
+    console.log(`  🎯 Aggressive Target: $${CONFIG.AGGRESSIVE_TARGET.toFixed(2)} (2% below ceiling)`);
+    console.log(`  📊 Soft High:         $${CONFIG.SOFT_HIGH.toFixed(2)} (gentle intervention starts)`);
+    console.log(`  📉 Max Price Change:  ${(CONFIG.MAX_PRICE_CHANGE_PERCENT * 100).toFixed(0)}% per intervention`);
+    console.log(`  💪 Bot Reserve:       ${(CONFIG.BOT_RESERVE_XNT / 1e12).toFixed(0)}M XNT`);
     console.log(`  ⏱️  Poll Interval:     ${CONFIG.POLL_INTERVAL_MS}ms`);
-    console.log(`  🎯 Gentle Move:       ${(CONFIG.GENTLE_PERCENT * 100).toFixed(0)}% to target`);
-    console.log(`  ⚡ Aggressive Move:   ${(CONFIG.AGGRESSIVE_PERCENT * 100).toFixed(0)}% to target`);
     console.log("");
   }
 
@@ -210,12 +208,24 @@ class PriceCorridorBot {
   // Inject XNT into pool (lowers price)
   async injectXnt(amount: number, reason: string): Promise<void> {
     console.log(`\n💉 INJECTING XNT: ${reason}`);
+
+    // Check available balance
+    const balance = await this.provider.connection.getTokenAccountBalance(this.authorityXnt!);
+    const available = parseInt(balance.value.amount);
+
+    if (amount > available) {
+      console.log(`   ⚠️  Requested: ${(amount / 1e6).toLocaleString()}M XNT`);
+      console.log(`   ⚠️  Available: ${(available / 1e6).toLocaleString()}M XNT`);
+      console.log(`   📉 Using available amount instead`);
+      amount = available * 0.9; // Use 90% of available to leave buffer
+    }
+
     console.log(`   Amount: ${(amount / 1e6).toLocaleString()} XNT`);
 
     try {
       await this.program.methods
         .depositXnt(new anchor.BN(Math.floor(amount)))
-        .accounts({
+        .accountsPartial({
           authority: this.authority.publicKey,
           pool: this.poolAddress,
           poolXnt: this.poolXnt!,
@@ -230,8 +240,8 @@ class PriceCorridorBot {
 
       console.log(`   ✅ Injection successful`);
     } catch (error) {
-      console.error(`   ❌ Injection failed:`, error);
-      throw error;
+      console.error(`   ❌ Injection failed:`, error.message);
+      // Continue monitoring even if intervention fails
     }
   }
 
@@ -243,7 +253,7 @@ class PriceCorridorBot {
     try {
       await this.program.methods
         .withdrawXnt(new anchor.BN(Math.floor(amount)))
-        .accounts({
+        .accountsPartial({
           authority: this.authority.publicKey,
           pool: this.poolAddress,
           poolXnt: this.poolXnt!,
@@ -270,61 +280,80 @@ class PriceCorridorBot {
 
     // Log current status
     const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] Price: $${price.toFixed(6)} | XNT: ${(state.xntReserve / 1e6).toLocaleString()}M | USDC: $${(state.usdcReserve / 1e6).toLocaleString()}M`);
+    console.log(`[${timestamp}] Price: $${price.toFixed(6)} | XNT: ${(state.xntReserve / 1e6).toLocaleString()}M | USDC: $${(state.usdcReserve / 1e6).toLocaleString()}M (virtual) | Real USDC: $${(state.realUsdc / 1e6).toLocaleString()}M`);
 
     // Determine intervention needed
     let interventionNeeded = false;
-    let targetPrice = CONFIG.PRICE_TARGET;
+    let targetPrice = 0;
     let movePercent = 1.0;
     let reason = "";
 
     if (price >= CONFIG.PRICE_CEILING) {
-      // CRITICAL: Hit ceiling
+      // CRITICAL: Hit ceiling - aggressively push 2% below ceiling
       interventionNeeded = true;
-      movePercent = CONFIG.AGGRESSIVE_PERCENT;
-      reason = `🚨 CEILING BREACH ($${price.toFixed(2)} >= $${CONFIG.PRICE_CEILING})`;
+      targetPrice = CONFIG.AGGRESSIVE_TARGET; // Target 2% below ceiling ($1.96)
+      movePercent = CONFIG.GENTLE_PERCENT; // Use gentle 50% to avoid huge swings
+      reason = `🚨 CEILING BREACH ($${price.toFixed(2)} >= $${CONFIG.PRICE_CEILING}) - Target $${CONFIG.AGGRESSIVE_TARGET}`;
     } else if (price >= CONFIG.SOFT_HIGH) {
-      // WARNING: Approaching ceiling
+      // WARNING: Approaching ceiling - gentle intervention
       interventionNeeded = true;
+      targetPrice = CONFIG.SOFT_HIGH; // Target soft high ($1.85)
       movePercent = CONFIG.GENTLE_PERCENT;
-      reason = `⚠️  SOFT HIGH BREACH ($${price.toFixed(2)} >= $${CONFIG.SOFT_HIGH})`;
-    } else if (price <= CONFIG.PRICE_FLOOR) {
-      // CRITICAL: Hit floor
-      interventionNeeded = true;
-      movePercent = CONFIG.AGGRESSIVE_PERCENT;
-      reason = `🚨 FLOOR BREACH ($${price.toFixed(2)} <= $${CONFIG.PRICE_FLOOR})`;
-    } else if (price <= CONFIG.SOFT_LOW) {
-      // WARNING: Approaching floor
-      interventionNeeded = true;
-      movePercent = CONFIG.GENTLE_PERCENT;
-      reason = `⚠️  SOFT LOW BREACH ($${price.toFixed(2)} <= $${CONFIG.SOFT_LOW})`;
+      reason = `⚠️  APPROACHING CEILING ($${price.toFixed(2)} >= $${CONFIG.SOFT_HIGH})`;
     }
+    // NO INTERVENTION when price is low - let it rise naturally
 
     if (interventionNeeded) {
       // Calculate full delta to target, then apply move percentage
       const fullDelta = this.calculateXntDelta(state, targetPrice);
       const adjustedDelta = fullDelta * movePercent;
 
+      // Calculate maximum delta that would cause exactly MAX_PRICE_CHANGE_PERCENT price change
+      // For price decrease (inject XNT): max_delta = X * change / (1 - change)
+      // For price increase (withdraw XNT): max_delta = X * change / (1 + change)
+      let maxDelta: number;
+      if (adjustedDelta > 0) {
+        // Injecting XNT (price will decrease)
+        maxDelta = state.xntReserve * CONFIG.MAX_PRICE_CHANGE_PERCENT / (1 - CONFIG.MAX_PRICE_CHANGE_PERCENT);
+      } else {
+        // Withdrawing XNT (price will increase)
+        maxDelta = state.xntReserve * CONFIG.MAX_PRICE_CHANGE_PERCENT / (1 + CONFIG.MAX_PRICE_CHANGE_PERCENT);
+      }
+
+      // Cap the intervention at max delta to limit price change to 3%
+      const cappedDelta = Math.sign(adjustedDelta) * Math.min(Math.abs(adjustedDelta), maxDelta);
+      const wasCapped = Math.abs(cappedDelta) < Math.abs(adjustedDelta);
+
+      // Skip if intervention is too small (prevents micro-interventions)
+      if (Math.abs(cappedDelta) < CONFIG.MIN_INTERVENTION_AMOUNT) {
+        console.log(`\n✅ Price stable at $${price.toFixed(6)} (delta ${(cappedDelta / 1e6).toFixed(3)}M XNT < minimum ${(CONFIG.MIN_INTERVENTION_AMOUNT / 1e6).toFixed(0)}M XNT)\n`);
+        return;
+      }
+
       console.log(`\n${"=".repeat(60)}`);
       console.log(reason);
       console.log(`   Current Price: $${price.toFixed(6)}`);
       console.log(`   Target Price:  $${targetPrice.toFixed(6)}`);
-      console.log(`   Full Delta:    ${(fullDelta / 1e6).toLocaleString()} XNT`);
+      console.log(`   Full Delta:    ${(fullDelta / 1e6).toLocaleString()}M XNT`);
       console.log(`   Move:          ${(movePercent * 100).toFixed(0)}%`);
-      console.log(`   Action Delta:  ${(adjustedDelta / 1e6).toLocaleString()} XNT`);
+      console.log(`   Desired Delta: ${(adjustedDelta / 1e6).toLocaleString()}M XNT`);
+      if (wasCapped) {
+        console.log(`   ⚠️  CAPPED at:  ${(cappedDelta / 1e6).toLocaleString()}M XNT (max ${(CONFIG.MAX_PRICE_CHANGE_PERCENT * 100).toFixed(0)}% price change)`);
+      }
+      console.log(`   Action Delta:  ${(cappedDelta / 1e6).toLocaleString()}M XNT`);
 
-      if (adjustedDelta > 0) {
-        // Need to inject XNT (price too high)
-        await this.injectXnt(adjustedDelta, reason);
+      // Only inject XNT to push price down (we don't withdraw to raise price)
+      if (cappedDelta > 0) {
+        await this.injectXnt(cappedDelta, reason);
       } else {
-        // Need to withdraw XNT (price too low)
-        await this.withdrawXnt(Math.abs(adjustedDelta), reason);
+        console.log(`   ⚠️  Skipping intervention: would need to withdraw XNT (bot only defends ceiling)`);
       }
 
       // Show new price
       const newState = await this.getPoolState();
+      const actualPriceChange = ((newState.price / price - 1) * 100);
       console.log(`   New Price:     $${newState.price.toFixed(6)}`);
-      console.log(`   Price Change:  ${((newState.price / price - 1) * 100).toFixed(2)}%`);
+      console.log(`   Price Change:  ${(actualPriceChange > 0 ? '+' : '')}${actualPriceChange.toFixed(2)}%`);
       console.log(`${"=".repeat(60)}\n`);
     }
   }
