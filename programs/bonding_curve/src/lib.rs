@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-declare_id!("6BYYf2Mn2S33rqvbthZMMiJ5KF3NJABNpsboCmH7wXRT");
+declare_id!("96dn2QeBXtjEd9tDBDfJb5qw6AtfAS3TEQQyfr9Ark1Y");
 
 #[program]
 pub mod bonding_curve {
@@ -15,6 +15,7 @@ pub mod bonding_curve {
         xnt_amount: u64,
         virtual_usdc_amount: u64,
         price_floor_enabled: bool,
+        price_ceiling: u64, // Price ceiling in base units (e.g., 2000000 for $2.00 with 6 decimals)
     ) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
 
@@ -44,10 +45,14 @@ pub mod bonding_curve {
         pool.is_graduated = false; // Trading enabled initially
         pool.price_floor_enabled = price_floor_enabled; // Set price floor flag
         pool.bump = ctx.bumps.pool;
+        pool.ceiling_reserve_xnt = ctx.accounts.ceiling_reserve_xnt.key();
+        pool.price_ceiling = price_ceiling;
+        pool.ceiling_reserve_bump = ctx.bumps.ceiling_reserve_pda;
 
         msg!("Pool initialized with {} XNT (single-sided)", xnt_amount);
         msg!("Virtual USDC reserve: {} (for price calculation)", virtual_usdc_amount);
         msg!("Starting price: ${}", virtual_usdc_amount / xnt_amount);
+        msg!("Price ceiling: ${}", price_ceiling as f64 / 1_000_000.0);
         msg!("Constant k: {}", pool.k);
 
         Ok(())
@@ -55,6 +60,7 @@ pub mod bonding_curve {
 
     /// Buy XNT with USDC using constant product formula
     /// Price increases as XNT is purchased
+    /// Automatically injects XNT from ceiling reserve if price approaches ceiling
     pub fn buy(ctx: Context<Buy>, usdc_amount: u64) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
 
@@ -91,6 +97,56 @@ pub mod bonding_curve {
         msg!("Trade #{}: Buying {} XNT for {} USDC", pool.trade_count + 1, xnt_out, usdc_amount);
         msg!("Price before: {}, effective: {}, after: {}", price_before, effective_price, price_after);
 
+        // AUTO-CEILING DEFENSE: If price would exceed ceiling, inject XNT from reserve
+        let mut xnt_injected = 0u64;
+        if price_after > pool.price_ceiling {
+            msg!("⚠️ Price ceiling breach detected! Price would be ${}", price_after as f64 / 1_000_000.0);
+            msg!("Ceiling: ${}", pool.price_ceiling as f64 / 1_000_000.0);
+
+            // Calculate how much XNT to inject to bring price back to ceiling
+            // Target: new_usdc / (new_xnt + injection) = price_ceiling
+            // Solve for injection: injection = (new_usdc / price_ceiling) - new_xnt
+            let target_xnt_reserve = (new_usdc_reserve as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pool.price_ceiling as u128)
+                .ok_or(ErrorCode::MathOverflow)?;
+
+            xnt_injected = (target_xnt_reserve
+                .checked_sub(new_xnt_reserve)
+                .ok_or(ErrorCode::MathOverflow)? as u64)
+                .saturating_add(1_000_000); // Add 1 XNT buffer
+
+            msg!("💉 Injecting {} XNT from ceiling reserve", xnt_injected);
+
+            // Transfer XNT from ceiling reserve to pool using PDA authority
+            let pool_key = pool.key();
+            let reserve_seeds = &[
+                b"ceiling_reserve",
+                pool_key.as_ref(),
+                &[pool.ceiling_reserve_bump],
+            ];
+            let reserve_signer = &[&reserve_seeds[..]];
+
+            let cpi_accounts = Transfer {
+                from: ctx.accounts.ceiling_reserve_xnt.to_account_info(),
+                to: ctx.accounts.pool_xnt.to_account_info(),
+                authority: ctx.accounts.ceiling_reserve_pda.to_account_info(),
+            };
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, reserve_signer);
+            token::transfer(cpi_ctx, xnt_injected)?;
+
+            // Recalculate new state after injection
+            let final_xnt_reserve = new_xnt_reserve
+                .checked_add(xnt_injected as u128)
+                .ok_or(ErrorCode::MathOverflow)?;
+            let final_price = new_usdc_reserve as u64 / final_xnt_reserve as u64;
+
+            msg!("✅ Price defended: ${}", final_price as f64 / 1_000_000.0);
+            msg!("New XNT reserve: {}", final_xnt_reserve);
+        }
+
         // Transfer USDC from buyer to pool
         let cpi_accounts = Transfer {
             from: ctx.accounts.buyer_usdc.to_account_info(),
@@ -119,9 +175,19 @@ pub mod bonding_curve {
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
         token::transfer(cpi_ctx, xnt_out)?;
 
-        // Update pool state
-        pool.xnt_reserve = new_xnt_reserve as u64;
+        // Update pool state (including any ceiling defense injection)
+        let final_xnt_reserve = (new_xnt_reserve as u64)
+            .checked_add(xnt_injected)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        pool.xnt_reserve = final_xnt_reserve;
         pool.usdc_reserve = new_usdc_reserve as u64;
+
+        // Update k to reflect new reserves after ceiling defense
+        pool.k = (final_xnt_reserve as u128)
+            .checked_mul(new_usdc_reserve)
+            .ok_or(ErrorCode::MathOverflow)?;
+
         pool.trade_count += 1;
 
         Ok(())
@@ -326,6 +392,36 @@ pub mod bonding_curve {
 
         let price_after = pool.usdc_reserve / pool.xnt_reserve;
         msg!("Price after: ${} (unchanged)", price_after);
+
+        Ok(())
+    }
+
+    /// Fund the ceiling reserve with XNT (authority only)
+    /// This XNT will be automatically injected when price approaches ceiling during buy trades
+    pub fn fund_ceiling_reserve(
+        ctx: Context<FundCeilingReserve>,
+        xnt_amount: u64,
+    ) -> Result<()> {
+        let pool = &ctx.accounts.pool;
+
+        require!(
+            ctx.accounts.authority.key() == pool.authority,
+            ErrorCode::Unauthorized
+        );
+
+        msg!("💰 Funding ceiling reserve with {} XNT", xnt_amount);
+
+        // Transfer XNT from authority to ceiling reserve
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.authority_xnt.to_account_info(),
+            to: ctx.accounts.ceiling_reserve_xnt.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        token::transfer(cpi_ctx, xnt_amount)?;
+
+        msg!("✅ Ceiling reserve funded successfully");
 
         Ok(())
     }
@@ -677,6 +773,23 @@ pub struct InitializePool<'info> {
     #[account(mut)]
     pub initializer_xnt: Account<'info, TokenAccount>,
 
+    /// Ceiling reserve PDA (authority for ceiling_reserve_xnt)
+    #[account(
+        seeds = [b"ceiling_reserve", pool.key().as_ref()],
+        bump
+    )]
+    /// CHECK: PDA used as authority for ceiling reserve token account
+    pub ceiling_reserve_pda: AccountInfo<'info>,
+
+    /// Ceiling reserve XNT token account (PDA-owned)
+    #[account(
+        init,
+        payer = initializer,
+        token::mint = xnt_mint,
+        token::authority = ceiling_reserve_pda,
+    )]
+    pub ceiling_reserve_xnt: Account<'info, TokenAccount>,
+
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
@@ -714,6 +827,21 @@ pub struct Buy<'info> {
     /// Buyer's XNT token account (destination)
     #[account(mut)]
     pub buyer_xnt: Account<'info, TokenAccount>,
+
+    /// Ceiling reserve PDA (authority for ceiling_reserve_xnt)
+    #[account(
+        seeds = [b"ceiling_reserve", pool.key().as_ref()],
+        bump = pool.ceiling_reserve_bump
+    )]
+    /// CHECK: PDA used as authority for ceiling reserve token account
+    pub ceiling_reserve_pda: AccountInfo<'info>,
+
+    /// Ceiling reserve XNT token account
+    #[account(
+        mut,
+        constraint = ceiling_reserve_xnt.key() == pool.ceiling_reserve_xnt
+    )]
+    pub ceiling_reserve_xnt: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -778,6 +906,31 @@ pub struct DepositXnt<'info> {
     /// Authority's XNT token account
     #[account(mut)]
     pub authority_xnt: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct FundCeilingReserve<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        seeds = [b"pool", pool.xnt_mint.as_ref(), pool.usdc_mint.as_ref()],
+        bump = pool.bump,
+    )]
+    pub pool: Account<'info, Pool>,
+
+    /// Authority's XNT token account (source)
+    #[account(mut)]
+    pub authority_xnt: Account<'info, TokenAccount>,
+
+    /// Ceiling reserve XNT token account (destination)
+    #[account(
+        mut,
+        constraint = ceiling_reserve_xnt.key() == pool.ceiling_reserve_xnt
+    )]
+    pub ceiling_reserve_xnt: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -901,6 +1054,9 @@ pub struct Pool {
     pub is_graduated: bool,   // DEPRECATED: Kept for compatibility, not used in price corridor strategy
     pub price_floor_enabled: bool, // Enable/disable $1.00 price floor protection
     pub bump: u8,
+    pub ceiling_reserve_xnt: Pubkey, // PDA-owned XNT reserve for automatic ceiling defense
+    pub price_ceiling: u64,   // Price threshold in USDC per XNT (e.g., 2000000 for $2.00)
+    pub ceiling_reserve_bump: u8, // Bump for ceiling reserve PDA
 }
 
 #[account]

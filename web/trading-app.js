@@ -6,10 +6,11 @@ const { Connection, Keypair, PublicKey, Transaction, SystemProgram, LAMPORTS_PER
 // Configuration
 const CONFIG = {
     RPC_URL: 'http://localhost:8899',
-    POOL_ADDRESS: '41BtpyzrYMGoM3ivFkw5ZiaEurSc4HBW1fdBKzQYuJ63', // Update with your pool address
-    PROGRAM_ID: '6BYYf2Mn2S33rqvbthZMMiJ5KF3NJABNpsboCmH7wXRT',
+    POOL_ADDRESS: 'DftpSEe5zukxPJJ2S3rJh635YvizsbRskZYZEV3MvWkT', // New pool address
+    PROGRAM_ID: '96dn2QeBXtjEd9tDBDfJb5qw6AtfAS3TEQQyfr9Ark1Y',
     TOKEN_PROGRAM_ID: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
     ASSOCIATED_TOKEN_PROGRAM_ID: 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
+    CEILING_RESERVE_XNT: '2Ckf88dRPontfyTnPYgppEj9mn2ebPHCRvrURLCa4Pnh', // Ceiling reserve XNT account
     AIRDROP_AMOUNT: 100_000 * 1e6, // 100K USDC (6 decimals)
     POLL_INTERVAL: 2000, // Update UI every 2 seconds
 };
@@ -185,6 +186,15 @@ async function updatePrice() {
             }
         } catch (e) {
             console.error('Error fetching real reserves:', e);
+        }
+
+        // Fetch ceiling reserve XNT balance
+        try {
+            const ceilingReserveInfo = await connection.getTokenAccountBalance(new PublicKey(CONFIG.CEILING_RESERVE_XNT));
+            const ceilingReserveXnt = parseInt(ceilingReserveInfo.value.amount) / 1e6;
+            document.getElementById('ceilingReserveXnt').textContent = ceilingReserveXnt.toLocaleString(undefined, { maximumFractionDigits: 3 });
+        } catch (e) {
+            console.error('Error fetching ceiling reserve:', e);
         }
 
         // Store pool data for quotes

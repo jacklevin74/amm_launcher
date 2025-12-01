@@ -51,7 +51,7 @@ const fs = require('fs');
   anchor.setProvider(provider);
   const program = anchor.workspace.BondingCurve;
 
-  const poolAddress = new anchor.web3.PublicKey('41BtpyzrYMGoM3ivFkw5ZiaEurSc4HBW1fdBKzQYuJ63');
+  const poolAddress = new anchor.web3.PublicKey('DftpSEe5zukxPJJ2S3rJh635YvizsbRskZYZEV3MvWkT');
   const pool = await program.account.pool.fetch(poolAddress);
 
   const poolXntAccount = await getAccount(connection, pool.poolXnt);
@@ -85,7 +85,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = '41BtpyzrYMGoM3ivFkw5ZiaEurSc4HBW1fdBKzQYuJ63';
+        const poolAddress = 'DftpSEe5zukxPJJ2S3rJh635YvizsbRskZYZEV3MvWkT';
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
 const anchor = require('@coral-xyz/anchor');
@@ -111,6 +111,12 @@ const fs = require('fs');
   const traderXnt = await getOrCreateAssociatedTokenAccount(connection, mainWallet, pool.xntMint, traderKeypair.publicKey);
   const traderUsdc = await getOrCreateAssociatedTokenAccount(connection, mainWallet, pool.usdcMint, traderKeypair.publicKey);
 
+  // Derive ceiling reserve PDA
+  const [ceilingReservePda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from('ceiling_reserve'), poolAddress.toBuffer()],
+    program.programId
+  );
+
   const tx = await program.methods
     .buy(new anchor.BN(${amount}))
     .accountsPartial({
@@ -120,6 +126,8 @@ const fs = require('fs');
       poolUsdc: pool.poolUsdc,
       buyerUsdc: traderUsdc.address,
       buyerXnt: traderXnt.address,
+      ceilingReservePda: ceilingReservePda,
+      ceilingReserveXnt: pool.ceilingReserveXnt,
       tokenProgram: TOKEN_PROGRAM_ID,
     })
     .signers([traderKeypair])
@@ -155,7 +163,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = '41BtpyzrYMGoM3ivFkw5ZiaEurSc4HBW1fdBKzQYuJ63';
+        const poolAddress = 'DftpSEe5zukxPJJ2S3rJh635YvizsbRskZYZEV3MvWkT';
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
 const anchor = require('@coral-xyz/anchor');
@@ -257,7 +265,7 @@ staticServer.listen(PORT, () => {
   console.log('  3. Open http://localhost:' + PORT + '/trading in your browser');
   console.log('  4. Create a wallet and start trading!');
   console.log('');
-  console.log('💡 Current Pool Address: 41BtpyzrYMGoM3ivFkw5ZiaEurSc4HBW1fdBKzQYuJ63');
+  console.log('💡 Current Pool Address: DftpSEe5zukxPJJ2S3rJh635YvizsbRskZYZEV3MvWkT');
   console.log('');
   console.log('Press Ctrl+C to stop the server\n');
 });
