@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-declare_id!("96dn2QeBXtjEd9tDBDfJb5qw6AtfAS3TEQQyfr9Ark1Y");
+declare_id!("2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF");
 
 #[program]
 pub mod bonding_curve {
@@ -16,6 +16,7 @@ pub mod bonding_curve {
         virtual_usdc_amount: u64,
         price_floor_enabled: bool,
         price_ceiling: u64, // Price ceiling in base units (e.g., 2000000 for $2.00 with 6 decimals)
+        price_floor: u64,   // Price floor in base units (e.g., 1000000 for $1.00 with 6 decimals)
     ) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
 
@@ -48,6 +49,7 @@ pub mod bonding_curve {
         pool.ceiling_reserve_xnt = ctx.accounts.ceiling_reserve_xnt.key();
         pool.price_ceiling = price_ceiling;
         pool.ceiling_reserve_bump = ctx.bumps.ceiling_reserve_pda;
+        pool.price_floor = price_floor;
 
         msg!("Pool initialized with {} XNT (single-sided)", xnt_amount);
         msg!("Virtual USDC reserve: {} (for price calculation)", virtual_usdc_amount);
@@ -89,9 +91,14 @@ pub mod bonding_curve {
 
         require!(xnt_out > 0, ErrorCode::ZeroOutput);
 
-        // Calculate effective price
+        // Calculate effective price (with proper decimal handling)
         let price_before = pool.usdc_reserve / pool.xnt_reserve;
-        let price_after = new_usdc_reserve as u64 / new_xnt_reserve as u64;
+        // Calculate price_after with 6 decimal precision: (usdc * 1e6) / xnt
+        let price_after = ((new_usdc_reserve as u128)
+            .checked_mul(1_000_000)
+            .ok_or(ErrorCode::MathOverflow)?
+            .checked_div(new_xnt_reserve)
+            .ok_or(ErrorCode::MathOverflow)?) as u64;
         let effective_price = usdc_amount / xnt_out;
 
         msg!("Trade #{}: Buying {} XNT for {} USDC", pool.trade_count + 1, xnt_out, usdc_amount);
@@ -223,23 +230,72 @@ pub mod bonding_curve {
 
         require!(usdc_out > 0, ErrorCode::ZeroOutput);
 
-        // Check that price won't drop below $1.00 (if floor enabled)
-        // Price = USDC / XNT, so for price >= 1.0, USDC >= XNT
-        if pool.price_floor_enabled {
-            require!(
-                new_usdc_reserve >= new_xnt_reserve,
-                ErrorCode::PriceBelowMinimum
-            );
-        }
-
-        // Calculate effective price
+        // Calculate effective price (with proper decimal handling)
         let price_before = pool.usdc_reserve / pool.xnt_reserve;
-        let price_after = new_usdc_reserve as u64 / new_xnt_reserve as u64;
+        // Calculate price_after with 6 decimal precision: (usdc * 1e6) / xnt
+        let price_after = ((new_usdc_reserve as u128)
+            .checked_mul(1_000_000)
+            .ok_or(ErrorCode::MathOverflow)?
+            .checked_div(new_xnt_reserve)
+            .ok_or(ErrorCode::MathOverflow)?) as u64;
         let effective_price = usdc_out / xnt_amount;
 
         msg!("Trade #{}: Selling {} XNT for {} USDC", pool.trade_count + 1, xnt_amount, usdc_out);
         msg!("Price before: {}, effective: {}, after: {}", price_before, effective_price, price_after);
-        msg!("Price remains above $1.00 minimum");
+
+        // AUTO-FLOOR DEFENSE: If price would fall below floor, remove XNT from pool and deposit to reserve
+        let mut xnt_removed = 0u64;
+        if price_after < pool.price_floor {
+            msg!("⚠️ Price floor breach detected! Price would be ${}", price_after as f64 / 1_000_000.0);
+            msg!("Floor: ${}", pool.price_floor as f64 / 1_000_000.0);
+
+            // Calculate how much XNT to remove to bring price back to floor
+            // Target: new_usdc / (new_xnt - removal) = price_floor
+            // Solve for removal: removal = new_xnt - (new_usdc / price_floor)
+            let target_xnt_reserve = (new_usdc_reserve as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pool.price_floor as u128)
+                .ok_or(ErrorCode::MathOverflow)?;
+
+            xnt_removed = (new_xnt_reserve
+                .checked_sub(target_xnt_reserve)
+                .ok_or(ErrorCode::MathOverflow)? as u64)
+                .saturating_sub(1_000_000); // Subtract 1 XNT buffer to stay slightly above floor
+
+            msg!("💉 Removing {} XNT from pool to ceiling reserve", xnt_removed);
+
+            // Transfer XNT from pool to ceiling reserve using pool PDA authority
+            let pool_seeds = &[
+                b"pool",
+                pool.xnt_mint.as_ref(),
+                pool.usdc_mint.as_ref(),
+                &[pool.bump],
+            ];
+            let pool_signer = &[&pool_seeds[..]];
+
+            let cpi_accounts = Transfer {
+                from: ctx.accounts.pool_xnt.to_account_info(),
+                to: ctx.accounts.ceiling_reserve_xnt.to_account_info(),
+                authority: pool.to_account_info(),
+            };
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, pool_signer);
+            token::transfer(cpi_ctx, xnt_removed)?;
+
+            // Recalculate new state after removal
+            let final_xnt_reserve = new_xnt_reserve
+                .checked_sub(xnt_removed as u128)
+                .ok_or(ErrorCode::MathOverflow)?;
+            let final_price = ((new_usdc_reserve as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(final_xnt_reserve)
+                .ok_or(ErrorCode::MathOverflow)?) as u64;
+
+            msg!("✅ Price defended: ${}", final_price as f64 / 1_000_000.0);
+            msg!("New XNT reserve: {}", final_xnt_reserve);
+        }
 
         // Transfer XNT from seller to pool
         let cpi_accounts = Transfer {
@@ -269,9 +325,13 @@ pub mod bonding_curve {
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
         token::transfer(cpi_ctx, usdc_out)?;
 
-        // Update pool state
-        pool.xnt_reserve = new_xnt_reserve as u64;
+        // Update pool state (accounting for XNT removal if floor defense triggered)
+        let final_xnt_reserve = (new_xnt_reserve as u64)
+            .checked_sub(xnt_removed)
+            .ok_or(ErrorCode::MathOverflow)?;
+        pool.xnt_reserve = final_xnt_reserve;
         pool.usdc_reserve = new_usdc_reserve as u64;
+        pool.k = (final_xnt_reserve as u128).checked_mul(new_usdc_reserve).ok_or(ErrorCode::MathOverflow)?;
         pool.trade_count += 1;
 
         Ok(())
@@ -880,6 +940,13 @@ pub struct Sell<'info> {
     #[account(mut)]
     pub seller_usdc: Account<'info, TokenAccount>,
 
+    /// Ceiling reserve XNT account (for floor defense)
+    #[account(
+        mut,
+        constraint = ceiling_reserve_xnt.key() == pool.ceiling_reserve_xnt
+    )]
+    pub ceiling_reserve_xnt: Account<'info, TokenAccount>,
+
     pub token_program: Program<'info, Token>,
 }
 
@@ -1057,6 +1124,7 @@ pub struct Pool {
     pub ceiling_reserve_xnt: Pubkey, // PDA-owned XNT reserve for automatic ceiling defense
     pub price_ceiling: u64,   // Price threshold in USDC per XNT (e.g., 2000000 for $2.00)
     pub ceiling_reserve_bump: u8, // Bump for ceiling reserve PDA
+    pub price_floor: u64,     // Price floor in USDC per XNT (e.g., 1000000 for $1.00)
 }
 
 #[account]

@@ -22,6 +22,7 @@ const CONFIG = {
   BOT_RESERVE_XNT: 10_000_000 * 1e6,    // 10M XNT for bot
   CEILING_RESERVE_XNT: 10_000_000 * 1e6, // 10M XNT for ceiling defense reserve
   PRICE_CEILING: 2_000_000,             // $2.00 price ceiling (6 decimals)
+  PRICE_FLOOR: 1_000_000,               // $1.00 price floor (6 decimals)
   TRADER_USDC: 10_000_000 * 1e6,        // 10M USDC for trader
   TRADER_SOL: 10 * LAMPORTS_PER_SOL,    // 10 SOL for fees
   TRADER_WALLET_PATH: "/tmp/trader-wallet.json",
@@ -131,7 +132,8 @@ async function main() {
       new anchor.BN(CONFIG.INITIAL_XNT),
       new anchor.BN(CONFIG.VIRTUAL_USDC),
       true, // Enable price floor
-      new anchor.BN(CONFIG.PRICE_CEILING) // Price ceiling
+      new anchor.BN(CONFIG.PRICE_CEILING), // Price ceiling
+      new anchor.BN(CONFIG.PRICE_FLOOR)    // Price floor
     )
     .accountsPartial({
       initializer: payer.publicKey,

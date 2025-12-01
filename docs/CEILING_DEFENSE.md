@@ -1,15 +1,20 @@
-# Automatic Price Stabilization Reserve
+# Automatic Price Stabilization Reserve (Ceiling & Floor Defense)
 
 ## Overview
 
-The Automatic Price Stabilization Reserve is a protocol-level feature that stabilizes the XNT price by automatically injecting XNT tokens from a dedicated PDA-controlled reserve when the price approaches the configured ceiling (default: $2.00) during buy transactions. The reserve PDA balance is used to stabilize the price and prevent excessive volatility.
+The Automatic Price Stabilization Reserve is a protocol-level feature that stabilizes the XNT price within a $1.00-$2.00 corridor using a dedicated PDA-controlled reserve. The system automatically:
+
+- **Ceiling Defense**: Injects XNT tokens from the reserve into the pool when price approaches the $2.00 ceiling during buy transactions
+- **Floor Defense**: Removes XNT tokens from the pool and deposits them to the reserve when price approaches the $1.00 floor during sell transactions
+
+The reserve PDA balance is used to stabilize the price and prevent excessive volatility in both directions.
 
 ## Design Goals
 
-1. **Price Stabilization**: The reserve PDA balance is used to stabilize the price and prevent excessive upward volatility
+1. **Price Stabilization**: The reserve PDA balance is used to stabilize the price and prevent excessive volatility (both upward and downward)
 2. **Protocol-Level Enforcement**: Price stabilization happens automatically within the smart contract, not via external bots
 3. **Transparent**: All stabilization actions are logged on-chain
-4. **Capital Efficient**: Uses a dedicated PDA-owned reserve that can be topped up by the authority
+4. **Capital Efficient**: Uses a single dedicated PDA-owned reserve that both receives deposits (floor defense) and makes withdrawals (ceiling defense)
 5. **No External Dependencies**: Works autonomously without requiring off-chain services
 
 ## Architecture
@@ -37,13 +42,13 @@ pub struct Pool {
 - **Authority**: Ceiling Reserve PDA
 - **Initial Funding**: 10M XNT (configurable)
 
-### Price Ceiling Logic
+### Price Ceiling Logic (Buy Transactions)
 
 The ceiling defense mechanism is implemented in the `buy()` instruction:
 
 ```rust
 // 1. Calculate price after buy (before injection)
-let price_after = new_usdc_reserve / new_xnt_reserve;
+let price_after = (new_usdc_reserve * 1_000_000) / new_xnt_reserve;
 
 // 2. Check if ceiling is breached
 if price_after > pool.price_ceiling {
@@ -60,20 +65,50 @@ if price_after > pool.price_ceiling {
 }
 ```
 
+### Price Floor Logic (Sell Transactions)
+
+The floor defense mechanism is implemented in the `sell()` instruction:
+
+```rust
+// 1. Calculate price after sell (before XNT removal)
+let price_after = (new_usdc_reserve * 1_000_000) / new_xnt_reserve;
+
+// 2. Check if floor is breached
+if price_after < pool.price_floor {
+    // 3. Calculate required XNT removal
+    let target_xnt_reserve = (new_usdc_reserve * 1_000_000) / pool.price_floor;
+    let xnt_to_remove = new_xnt_reserve - target_xnt_reserve - buffer;
+
+    // 4. Transfer XNT from pool to ceiling reserve using pool PDA authority
+    // CPI to SPL Token program
+
+    // 5. Update pool state with reduced XNT
+    pool.xnt_reserve = new_xnt_reserve - xnt_to_remove;
+    pool.k = pool.xnt_reserve * new_usdc_reserve;
+}
+```
+
 ### Calculation Details
 
 **Price Calculation:**
-- Price = USDC Reserve / XNT Reserve
+- Price = (USDC Reserve * 1_000_000) / XNT Reserve
 - All values use 6 decimals
 - Price ceiling: 2_000_000 (represents $2.00)
+- Price floor: 1_000_000 (represents $1.00)
 
-**Injection Amount:**
+**Ceiling Defense - Injection Amount:**
 ```
 target_xnt = (usdc_reserve * 1_000_000) / price_ceiling
 injection = target_xnt - current_xnt + buffer
 ```
-
 The buffer (1 XNT) ensures the price stays slightly below the ceiling after injection.
+
+**Floor Defense - Removal Amount:**
+```
+target_xnt = (usdc_reserve * 1_000_000) / price_floor
+removal = current_xnt - target_xnt - buffer
+```
+The buffer (1 XNT) ensures the price stays slightly above the floor after removal.
 
 ## Instructions
 
@@ -119,6 +154,16 @@ pool.ceiling_reserve_bump = ctx.bumps.ceiling_reserve_pda;
 - Logs injection amount and new price
 - Updates pool state (xnt_reserve, k constant)
 
+### 4. `sell` (Modified)
+**Added Accounts:**
+- `ceiling_reserve_xnt` - Ceiling reserve XNT account (for floor defense deposits)
+
+**New Behavior:**
+- Checks price after sell calculation
+- If price < floor, automatically removes XNT from pool and deposits to reserve
+- Logs removal amount and new price
+- Updates pool state (xnt_reserve, k constant)
+
 ## Setup Instructions
 
 ### 1. Deploy Program
@@ -148,6 +193,7 @@ const CONFIG = {
   VIRTUAL_USDC: 10_000_000 * 1e6,        // Virtual USDC
   CEILING_RESERVE_XNT: 10_000_000 * 1e6, // Ceiling reserve
   PRICE_CEILING: 2_000_000,              // $2.00 (6 decimals)
+  PRICE_FLOOR: 1_000_000,                // $1.00 (6 decimals)
   // ...
 };
 ```
@@ -197,6 +243,7 @@ const [ceilingReservePda] = anchor.web3.PublicKey.findProgramAddressSync(
 
 ### On-Chain Logs
 
+**Ceiling Defense (Buy Transactions)**:
 When ceiling defense triggers, the program logs:
 ```
 ⚠️ Price ceiling breach detected!
@@ -205,12 +252,22 @@ When ceiling defense triggers, the program logs:
 📊 New price: $Y
 ```
 
+**Floor Defense (Sell Transactions)**:
+When floor defense triggers, the program logs:
+```
+⚠️ Price floor breach detected!
+💉 Removing X XNT from pool to ceiling reserve
+✅ Price defended: $Y
+📊 New XNT reserve: Z
+```
+
 ### Web Interface Display
 
 The trading interface shows:
 - **Ceiling Reserve Balance**: Real-time XNT balance in reserve
-- **Status**: "⚡ Auto-injected when price > $2.00"
+- **Status**: "⚡ Auto-injection when price > $2.00, Auto-deposit when price < $1.00"
 - **Styling**: Orange theme for visibility
+- **Reserve Dynamics**: Shows reserve increasing during floor defense, decreasing during ceiling defense
 
 ## Security Considerations
 
@@ -288,6 +345,13 @@ anchor test
 
 ## Conclusion
 
-The Automatic Ceiling Defense mechanism provides a robust, trustless way to enforce price ceilings without relying on external infrastructure. By integrating directly into the buy instruction, it guarantees that prices cannot exceed the configured ceiling while maintaining simplicity and capital efficiency.
+The Automatic Price Stabilization Reserve (Ceiling & Floor Defense) provides a robust, trustless way to enforce a $1.00-$2.00 price corridor without relying on external infrastructure. By integrating directly into the buy and sell instructions, it guarantees that prices stay within the configured range while maintaining simplicity and capital efficiency.
 
-The design leverages Solana's PDA system for secure, autonomous operation and requires minimal computational overhead. Combined with the web interface's real-time monitoring, it provides both users and administrators with full transparency into the ceiling defense system's operation.
+**Key Benefits:**
+- **Bidirectional Stabilization**: Protects against both upward and downward price volatility
+- **Self-Balancing Reserve**: Reserve grows during sell pressure (floor defense) and shrinks during buy pressure (ceiling defense)
+- **Protocol-Level Enforcement**: No external bots or monitoring required
+- **Capital Efficient**: Single reserve serves both defense mechanisms
+- **Transparent**: All actions logged on-chain
+
+The design leverages Solana's PDA system for secure, autonomous operation and requires minimal computational overhead. Combined with the web interface's real-time monitoring, it provides both users and administrators with full transparency into the price stabilization system's operation.

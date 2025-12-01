@@ -8,11 +8,11 @@ skip-lint = false
 
 [programs.localnet]
 lottery_amm = "C8x5EWRYp1QMESFn3pPeNVEfCD6ecE4iziUbqjw6RNrG"
-bonding_curve = "96dn2QeBXtjEd9tDBDfJb5qw6AtfAS3TEQQyfr9Ark1Y"
+bonding_curve = "2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF"
 
 [programs.testnet]
 lottery_amm = "C8x5EWRYp1QMESFn3pPeNVEfCD6ecE4iziUbqjw6RNrG"
-bonding_curve = "96dn2QeBXtjEd9tDBDfJb5qw6AtfAS3TEQQyfr9Ark1Y"
+bonding_curve = "2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF"
 
 [registry]
 url = "https://api.apr.dev"
