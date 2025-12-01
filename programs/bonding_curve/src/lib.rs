@@ -50,6 +50,7 @@ pub mod bonding_curve {
         pool.price_ceiling = price_ceiling;
         pool.ceiling_reserve_bump = ctx.bumps.ceiling_reserve_pda;
         pool.price_floor = price_floor;
+        pool.sol_vault_bump = ctx.bumps.sol_vault;
 
         msg!("Pool initialized with {} XNT (single-sided)", xnt_amount);
         msg!("Virtual USDC reserve: {} (for price calculation)", virtual_usdc_amount);
@@ -722,6 +723,94 @@ pub mod bonding_curve {
         Ok(max_sellable)
     }
 
+    /// Wrap native SOL into XNT tokens
+    /// User sends SOL, receives XNT at 1:1 ratio (1 SOL = 1 XNT)
+    pub fn wrap_sol(ctx: Context<WrapSol>, sol_amount: u64) -> Result<()> {
+        let pool = &ctx.accounts.pool;
+
+        msg!("Wrapping {} SOL into XNT", sol_amount as f64 / 1_000_000_000.0);
+
+        // Transfer SOL from user to SOL vault (PDA)
+        let ix = anchor_lang::solana_program::system_instruction::transfer(
+            &ctx.accounts.user.key(),
+            &ctx.accounts.sol_vault.key(),
+            sol_amount,
+        );
+        anchor_lang::solana_program::program::invoke(
+            &ix,
+            &[
+                ctx.accounts.user.to_account_info(),
+                ctx.accounts.sol_vault.to_account_info(),
+            ],
+        )?;
+
+        // Calculate XNT to mint (1:1 ratio with SOL)
+        // 1 SOL (9 decimals) = 1 XNT (6 decimals)
+        // So: xnt_amount = sol_amount / 1000 (convert 9 decimals to 6 decimals)
+        let xnt_amount = sol_amount
+            .checked_div(1_000)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        msg!("Minting {} XNT", xnt_amount as f64 / 1_000_000.0);
+
+        // Transfer XNT from pool to user using PDA authority
+        let seeds = &[
+            b"pool",
+            pool.xnt_mint.as_ref(),
+            pool.usdc_mint.as_ref(),
+            &[pool.bump],
+        ];
+        let signer = &[&seeds[..]];
+
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.pool_xnt.to_account_info(),
+            to: ctx.accounts.user_xnt.to_account_info(),
+            authority: pool.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+        token::transfer(cpi_ctx, xnt_amount)?;
+
+        msg!("✅ Wrapped {} SOL into {} XNT", sol_amount as f64 / 1_000_000_000.0, xnt_amount as f64 / 1_000_000.0);
+
+        Ok(())
+    }
+
+    /// Unwrap XNT tokens back to native SOL
+    /// User sends XNT, receives SOL at 1:1 ratio (1 XNT = 1 SOL)
+    pub fn unwrap_sol(ctx: Context<UnwrapSol>, xnt_amount: u64) -> Result<()> {
+        let pool = &ctx.accounts.pool;
+
+        msg!("Unwrapping {} XNT into SOL", xnt_amount as f64 / 1_000_000.0);
+
+        // Transfer XNT from user to pool
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.user_xnt.to_account_info(),
+            to: ctx.accounts.pool_xnt.to_account_info(),
+            authority: ctx.accounts.user.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        token::transfer(cpi_ctx, xnt_amount)?;
+
+        // Calculate SOL to return (1:1 ratio with XNT)
+        // 1 XNT (6 decimals) = 1 SOL (9 decimals)
+        // So: sol_amount = xnt_amount * 1000 (convert 6 decimals to 9 decimals)
+        let sol_amount = xnt_amount
+            .checked_mul(1_000)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        msg!("Returning {} SOL", sol_amount as f64 / 1_000_000_000.0);
+
+        // Transfer SOL from vault to user
+        **ctx.accounts.sol_vault.to_account_info().try_borrow_mut_lamports()? -= sol_amount;
+        **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += sol_amount;
+
+        msg!("✅ Unwrapped {} XNT into {} SOL", xnt_amount as f64 / 1_000_000.0, sol_amount as f64 / 1_000_000_000.0);
+
+        Ok(())
+    }
+
     /// Add liquidity to the pool (anyone can add proportional liquidity)
     /// Returns LP tokens based on share of pool
     pub fn add_liquidity(
@@ -887,6 +976,14 @@ pub struct InitializePool<'info> {
         token::authority = ceiling_reserve_pda,
     )]
     pub ceiling_reserve_xnt: Account<'info, TokenAccount>,
+
+    /// SOL vault PDA (for wrapping/unwrapping SOL)
+    #[account(
+        seeds = [b"sol_vault", pool.key().as_ref()],
+        bump
+    )]
+    /// CHECK: PDA vault for holding native SOL
+    pub sol_vault: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
@@ -1172,6 +1269,75 @@ pub struct AddLiquidity<'info> {
 }
 
 #[derive(Accounts)]
+pub struct WrapSol<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    #[account(
+        seeds = [b"pool", pool.xnt_mint.as_ref(), pool.usdc_mint.as_ref()],
+        bump = pool.bump
+    )]
+    pub pool: Account<'info, Pool>,
+
+    /// SOL vault PDA (holds wrapped SOL)
+    #[account(
+        mut,
+        seeds = [b"sol_vault", pool.key().as_ref()],
+        bump = pool.sol_vault_bump
+    )]
+    /// CHECK: PDA vault for holding native SOL
+    pub sol_vault: AccountInfo<'info>,
+
+    /// Pool's XNT token account
+    #[account(
+        mut,
+        constraint = pool_xnt.key() == pool.pool_xnt
+    )]
+    pub pool_xnt: Account<'info, TokenAccount>,
+
+    /// User's XNT token account (destination)
+    #[account(mut)]
+    pub user_xnt: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UnwrapSol<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    #[account(
+        seeds = [b"pool", pool.xnt_mint.as_ref(), pool.usdc_mint.as_ref()],
+        bump = pool.bump
+    )]
+    pub pool: Account<'info, Pool>,
+
+    /// SOL vault PDA (holds wrapped SOL)
+    #[account(
+        mut,
+        seeds = [b"sol_vault", pool.key().as_ref()],
+        bump = pool.sol_vault_bump
+    )]
+    /// CHECK: PDA vault for holding native SOL
+    pub sol_vault: AccountInfo<'info>,
+
+    /// Pool's XNT token account
+    #[account(
+        mut,
+        constraint = pool_xnt.key() == pool.pool_xnt
+    )]
+    pub pool_xnt: Account<'info, TokenAccount>,
+
+    /// User's XNT token account (source)
+    #[account(mut)]
+    pub user_xnt: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 pub struct ViewPool<'info> {
     pub pool: Account<'info, Pool>,
 }
@@ -1196,6 +1362,7 @@ pub struct Pool {
     pub price_ceiling: u64,   // Price threshold in USDC per XNT (e.g., 2000000 for $2.00)
     pub ceiling_reserve_bump: u8, // Bump for ceiling reserve PDA
     pub price_floor: u64,     // Price floor in USDC per XNT (e.g., 1000000 for $1.00)
+    pub sol_vault_bump: u8,   // Bump for SOL vault PDA
 }
 
 #[account]

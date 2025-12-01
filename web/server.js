@@ -458,11 +458,31 @@ const fs = require('fs');
     return;
   }
 
+  // Serve IDL file
+  if (parsedUrl.pathname === '/idl/bonding_curve.json') {
+    const idlPath = path.join(__dirname, '../target/idl/bonding_curve.json');
+    fs.readFile(idlPath, 'utf8', (err, data) => {
+      if (err) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'IDL not found' }));
+        return;
+      }
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      });
+      res.end(data);
+    });
+    return;
+  }
+
   let filePath = req.url;
   if (req.url === '/' || req.url === '/trading') {
     filePath = '/trading.html';
   } else if (req.url === '/admin') {
     filePath = '/admin.html';
+  } else if (req.url === '/wrap') {
+    filePath = '/wrap.html';
   } else if (req.url === '/c64/trading') {
     filePath = '/c64/trading.html';
   } else if (req.url === '/c64/admin') {
