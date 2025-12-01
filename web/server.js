@@ -44,18 +44,18 @@ const fs = require('fs');
 
 (async () => {
   const connection = new anchor.web3.Connection('http://localhost:8899', 'confirmed');
-  const walletPath = process.env.ANCHOR_WALLET || process.env.HOME + '/.config/solana/id.json';
-  const mainWallet = anchor.web3.Keypair.fromSecretKey(Buffer.from(JSON.parse(fs.readFileSync(walletPath, 'utf-8'))));
-  const wallet = new anchor.Wallet(mainWallet);
-  const provider = new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
-  anchor.setProvider(provider);
-  const program = anchor.workspace.BondingCurve;
+  const poolAddress = new anchor.web3.PublicKey('C9VdVhmEeyDhqeQYrqwGe3eS9YMighTHXuLyAdk227Hr');
 
-  const poolAddress = new anchor.web3.PublicKey('Erv5YtP4vtBdJxG7Dh44vpjm5w5yJUmmyESpqzQwvFfc');
-  const pool = await program.account.pool.fetch(poolAddress);
+  // Read pool data directly without using anchor decode
+  const poolAccountInfo = await connection.getAccountInfo(poolAddress);
+  if (!poolAccountInfo) throw new Error('Pool not found');
 
-  const poolXntAccount = await getAccount(connection, pool.poolXnt);
-  const poolUsdcAccount = await getAccount(connection, pool.poolUsdc);
+  const poolData = poolAccountInfo.data;
+  const poolXnt = new anchor.web3.PublicKey(poolData.slice(104, 136));
+  const poolUsdc = new anchor.web3.PublicKey(poolData.slice(136, 168));
+
+  const poolXntAccount = await getAccount(connection, poolXnt);
+  const poolUsdcAccount = await getAccount(connection, poolUsdc);
 
   console.log(JSON.stringify({
     realXnt: poolXntAccount.amount.toString(),
@@ -85,57 +85,9 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'Erv5YtP4vtBdJxG7Dh44vpjm5w5yJUmmyESpqzQwvFfc';
+        const poolAddress = 'C9VdVhmEeyDhqeQYrqwGe3eS9YMighTHXuLyAdk227Hr';
 
-        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
-const anchor = require('@coral-xyz/anchor');
-const { TOKEN_PROGRAM_ID } = require('@solana/spl-token');
-const fs = require('fs');
-
-(async () => {
-  const connection = new anchor.web3.Connection('http://localhost:8899', 'confirmed');
-  const walletPath = process.env.ANCHOR_WALLET || process.env.HOME + '/.config/solana/id.json';
-  const mainWallet = anchor.web3.Keypair.fromSecretKey(Buffer.from(JSON.parse(fs.readFileSync(walletPath, 'utf-8'))));
-  const wallet = new anchor.Wallet(mainWallet);
-  const provider = new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
-  anchor.setProvider(provider);
-  const program = anchor.workspace.BondingCurve;
-
-  const poolAddress = new anchor.web3.PublicKey('${poolAddress}');
-  const pool = await program.account.pool.fetch(poolAddress);
-
-  const traderWalletData = JSON.parse(fs.readFileSync('/tmp/trader-wallet.json', 'utf8'));
-  const traderKeypair = anchor.web3.Keypair.fromSecretKey(new Uint8Array(traderWalletData));
-
-  const { getOrCreateAssociatedTokenAccount } = require('@solana/spl-token');
-  const traderXnt = await getOrCreateAssociatedTokenAccount(connection, mainWallet, pool.xntMint, traderKeypair.publicKey);
-  const traderUsdc = await getOrCreateAssociatedTokenAccount(connection, mainWallet, pool.usdcMint, traderKeypair.publicKey);
-
-  // Derive ceiling reserve PDA
-  const [ceilingReservePda] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from('ceiling_reserve'), poolAddress.toBuffer()],
-    program.programId
-  );
-
-  const tx = await program.methods
-    .buy(new anchor.BN(${amount}))
-    .accountsPartial({
-      buyer: traderKeypair.publicKey,
-      pool: poolAddress,
-      poolXnt: pool.poolXnt,
-      poolUsdc: pool.poolUsdc,
-      buyerUsdc: traderUsdc.address,
-      buyerXnt: traderXnt.address,
-      ceilingReservePda: ceilingReservePda,
-      ceilingReserveXnt: pool.ceilingReserveXnt,
-      tokenProgram: TOKEN_PROGRAM_ID,
-    })
-    .signers([traderKeypair])
-    .rpc();
-
-  console.log(JSON.stringify({ success: true, tx }));
-})().catch(e => console.log(JSON.stringify({ success: false, error: e.message })));
-"`;
+        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/web-buy.ts ${amount} ${poolAddress}`;
 
         exec(cmd, (error, stdout, stderr) => {
           if (error) {
@@ -189,7 +141,7 @@ const fs = require('fs');
   anchor.setProvider(provider);
   const program = anchor.workspace.BondingCurve;
 
-  const poolAddress = new anchor.web3.PublicKey('Erv5YtP4vtBdJxG7Dh44vpjm5w5yJUmmyESpqzQwvFfc');
+  const poolAddress = new anchor.web3.PublicKey('C9VdVhmEeyDhqeQYrqwGe3eS9YMighTHXuLyAdk227Hr');
   const pool = await program.account.pool.fetch(poolAddress);
 
   console.log(JSON.stringify({
@@ -229,7 +181,7 @@ const fs = require('fs');
   anchor.setProvider(provider);
   const program = anchor.workspace.BondingCurve;
 
-  const poolAddress = new anchor.web3.PublicKey('Erv5YtP4vtBdJxG7Dh44vpjm5w5yJUmmyESpqzQwvFfc');
+  const poolAddress = new anchor.web3.PublicKey('C9VdVhmEeyDhqeQYrqwGe3eS9YMighTHXuLyAdk227Hr');
   const pool = await program.account.pool.fetch(poolAddress);
 
   const reserveInfo = await connection.getTokenAccountBalance(pool.ceilingReserveXnt);
@@ -264,7 +216,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'Erv5YtP4vtBdJxG7Dh44vpjm5w5yJUmmyESpqzQwvFfc';
+        const poolAddress = 'C9VdVhmEeyDhqeQYrqwGe3eS9YMighTHXuLyAdk227Hr';
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
 const anchor = require('@coral-xyz/anchor');
@@ -326,7 +278,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'Erv5YtP4vtBdJxG7Dh44vpjm5w5yJUmmyESpqzQwvFfc';
+        const poolAddress = 'C9VdVhmEeyDhqeQYrqwGe3eS9YMighTHXuLyAdk227Hr';
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
 const anchor = require('@coral-xyz/anchor');
@@ -394,50 +346,9 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'Erv5YtP4vtBdJxG7Dh44vpjm5w5yJUmmyESpqzQwvFfc';
+        const poolAddress = 'C9VdVhmEeyDhqeQYrqwGe3eS9YMighTHXuLyAdk227Hr';
 
-        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
-const anchor = require('@coral-xyz/anchor');
-const { TOKEN_PROGRAM_ID } = require('@solana/spl-token');
-const fs = require('fs');
-
-(async () => {
-  const connection = new anchor.web3.Connection('http://localhost:8899', 'confirmed');
-  const walletPath = process.env.ANCHOR_WALLET || process.env.HOME + '/.config/solana/id.json';
-  const mainWallet = anchor.web3.Keypair.fromSecretKey(Buffer.from(JSON.parse(fs.readFileSync(walletPath, 'utf-8'))));
-  const wallet = new anchor.Wallet(mainWallet);
-  const provider = new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
-  anchor.setProvider(provider);
-  const program = anchor.workspace.BondingCurve;
-
-  const poolAddress = new anchor.web3.PublicKey('${poolAddress}');
-  const pool = await program.account.pool.fetch(poolAddress);
-
-  const traderWalletData = JSON.parse(fs.readFileSync('/tmp/trader-wallet.json', 'utf8'));
-  const traderKeypair = anchor.web3.Keypair.fromSecretKey(new Uint8Array(traderWalletData));
-
-  const { getOrCreateAssociatedTokenAccount } = require('@solana/spl-token');
-  const traderXnt = await getOrCreateAssociatedTokenAccount(connection, mainWallet, pool.xntMint, traderKeypair.publicKey);
-  const traderUsdc = await getOrCreateAssociatedTokenAccount(connection, mainWallet, pool.usdcMint, traderKeypair.publicKey);
-
-  const tx = await program.methods
-    .sell(new anchor.BN(${amount}))
-    .accountsPartial({
-      seller: traderKeypair.publicKey,
-      pool: poolAddress,
-      poolXnt: pool.poolXnt,
-      poolUsdc: pool.poolUsdc,
-      sellerUsdc: traderUsdc.address,
-      sellerXnt: traderXnt.address,
-      ceilingReserveXnt: pool.ceilingReserveXnt,
-      tokenProgram: TOKEN_PROGRAM_ID,
-    })
-    .signers([traderKeypair])
-    .rpc();
-
-  console.log(JSON.stringify({ success: true, tx }));
-})().catch(e => console.log(JSON.stringify({ success: false, error: e.message })));
-"`;
+        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/web-sell.ts ${amount} ${poolAddress}`;
 
         exec(cmd, (error, stdout, stderr) => {
           if (error) {
@@ -526,7 +437,7 @@ staticServer.listen(PORT, () => {
   console.log('  3. Open http://localhost:' + PORT + '/trading in your browser');
   console.log('  4. Create a wallet and start trading!');
   console.log('');
-  console.log('💡 Current Pool Address: Erv5YtP4vtBdJxG7Dh44vpjm5w5yJUmmyESpqzQwvFfc');
+  console.log('💡 Current Pool Address: C9VdVhmEeyDhqeQYrqwGe3eS9YMighTHXuLyAdk227Hr');
   console.log('');
   console.log('Press Ctrl+C to stop the server\n');
 });

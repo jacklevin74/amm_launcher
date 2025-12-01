@@ -457,6 +457,17 @@
             margin: -8px 0;
             position: relative;
             z-index: 1;
+            background: rgba(102, 170, 187, 0.1);
+            border: 1px solid #6ab;
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 8px;
+        }
+
+        .swap-arrow:hover {
+            background: rgba(102, 170, 187, 0.2);
+            transform: scale(1.1);
         }
 
         .trade-details-inline {
@@ -589,12 +600,12 @@
                     <!-- Uniswap-style token input card -->
                     <div class="token-input-card">
                         <div class="token-input-header">
-                            <span class="input-label">You pay</span>
+                            <span class="input-label" id="inputLabel">You pay</span>
                         </div>
                         <div class="token-input-body">
                             <input type="number" id="tradeAmount" class="token-amount-input" placeholder="0.0" min="0" step="1000" value="10000" oninput="updateQuote()">
                             <div class="token-select">
-                                <span class="token-symbol">USDC</span>
+                                <span class="token-symbol" id="inputToken">USDC</span>
                             </div>
                         </div>
                         <div class="quick-amounts">
@@ -605,18 +616,18 @@
                         </div>
                     </div>
 
-                    <!-- Swap arrow -->
-                    <div class="swap-arrow">↓</div>
+                    <!-- Swap arrow (clickable toggle) -->
+                    <button class="swap-arrow" onclick="toggleSwapDirection()">↓</button>
 
                     <!-- Token output card -->
                     <div class="token-input-card" id="quoteDisplay">
                         <div class="token-input-header">
-                            <span class="input-label">You receive</span>
+                            <span class="input-label" id="outputLabel">You receive</span>
                         </div>
                         <div class="token-input-body">
                             <div class="token-amount-display" id="quoteReceive">0.0</div>
                             <div class="token-select">
-                                <span class="token-symbol">XNT</span>
+                                <span class="token-symbol" id="outputToken">XNT</span>
                             </div>
                         </div>
 
@@ -642,11 +653,11 @@
                     </div>
 
                     <div class="btn-group">
-                        <button class="btn-buy" onclick="executeBuy()" id="buyBtn" disabled>
+                        <button class="btn-buy" onclick="executeSwap()" id="swapBtn" disabled>
                             Swap
                         </button>
-                        <button class="btn-sell" onclick="executeSell()" id="sellBtn" disabled style="display:none;">
-                            Sell
+                        <button class="btn-secondary" onclick="resetTrading()">
+                            Reset
                         </button>
                     </div>
                 </div>

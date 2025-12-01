@@ -6,11 +6,11 @@ const { Connection, Keypair, PublicKey, Transaction, SystemProgram, LAMPORTS_PER
 // Configuration
 const CONFIG = {
     RPC_URL: 'http://localhost:8899',
-    POOL_ADDRESS: 'Erv5YtP4vtBdJxG7Dh44vpjm5w5yJUmmyESpqzQwvFfc', // Pool with floor defense
+    POOL_ADDRESS: 'C9VdVhmEeyDhqeQYrqwGe3eS9YMighTHXuLyAdk227Hr', // Pool with floor and ceiling defense
     PROGRAM_ID: '2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF',
     TOKEN_PROGRAM_ID: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
     ASSOCIATED_TOKEN_PROGRAM_ID: 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
-    CEILING_RESERVE_XNT: 'DQgCw7F2TZch4fyXcRYh7bRrJZ6xipD4RrBaDAmxWmq1', // Ceiling reserve XNT account
+    CEILING_RESERVE_XNT: '4bvuXBmwTFWShM9pXgTDoaZfVjnYHqaR1GwTvKSnxGzc', // Ceiling reserve XNT account
     AIRDROP_AMOUNT: 100_000 * 1e6, // 100K USDC (6 decimals)
     POLL_INTERVAL: 2000, // Update UI every 2 seconds
 };
@@ -25,12 +25,16 @@ let totalXntBought = 0;
 let totalUsdcReceived = 0;
 let totalXntSold = 0;
 let priceUpdateInterval = null;
+let swapDirection = 'buy'; // 'buy' (USDC→XNT) or 'sell' (XNT→USDC)
 
 // Initialize connection
 async function init() {
     try {
         connection = new Connection(CONFIG.RPC_URL, 'confirmed');
         showStatus('Connected to Solana RPC', 'success');
+
+        // Initial price update to get pool data first
+        await updatePrice();
 
         // Try to load trader wallet from server first
         await loadTraderWalletFromServer();
@@ -39,9 +43,6 @@ async function init() {
         if (!priceUpdateInterval) {
             priceUpdateInterval = setInterval(updatePrice, CONFIG.POLL_INTERVAL);
         }
-
-        // Initial price update
-        await updatePrice();
     } catch (error) {
         showStatus('Error connecting to RPC: ' + error.message, 'error');
     }
@@ -64,6 +65,9 @@ async function createWallet() {
             2 * LAMPORTS_PER_SOL
         );
         await connection.confirmTransaction(airdropSignature);
+
+        // Airdrop 1000 SOL for testing
+        await airdropSOL();
 
         showStatus('Wallet created successfully!', 'success');
         updateWalletUI();
@@ -89,6 +93,9 @@ async function loadTraderWalletFromServer() {
 
         // Save to localStorage for future use
         localStorage.setItem('trader_wallet', JSON.stringify(walletData));
+
+        // Airdrop 1000 SOL for testing
+        await airdropSOL();
 
         showStatus('Trader wallet loaded successfully! (1.1M USDC)', 'success');
         updateWalletUI();
@@ -123,15 +130,32 @@ function updateWalletUI() {
     if (!wallet) {
         document.getElementById('noWallet').style.display = 'block';
         document.getElementById('hasWallet').style.display = 'none';
-        document.getElementById('buyBtn').disabled = true;
-        document.getElementById('sellBtn').disabled = true;
+        document.getElementById('swapBtn').disabled = true;
     } else {
         document.getElementById('noWallet').style.display = 'none';
         document.getElementById('hasWallet').style.display = 'block';
         document.getElementById('walletAddress').textContent = wallet.publicKey.toString();
-        document.getElementById('buyBtn').disabled = false;
-        document.getElementById('sellBtn').disabled = false;
+        document.getElementById('swapBtn').disabled = false;
     }
+}
+
+// Toggle swap direction
+function toggleSwapDirection() {
+    swapDirection = swapDirection === 'buy' ? 'sell' : 'buy';
+
+    // Update UI elements
+    if (swapDirection === 'buy') {
+        document.getElementById('inputToken').textContent = 'USDC';
+        document.getElementById('outputToken').textContent = 'XNT';
+        document.querySelector('.swap-arrow').textContent = '↓';
+    } else {
+        document.getElementById('inputToken').textContent = 'XNT';
+        document.getElementById('outputToken').textContent = 'USDC';
+        document.querySelector('.swap-arrow').textContent = '↑';
+    }
+
+    // Refresh quote
+    updateQuote();
 }
 
 // Airdrop USDC
@@ -139,6 +163,27 @@ async function airdropUSDC() {
     showStatus('⚠️ Airdrop is only available via CLI trader', 'info');
     showStatus('Run: npx ts-node scripts/interactive-trader.ts --pool=' + CONFIG.POOL_ADDRESS, 'info');
     showStatus('Then press [a] to airdrop USDC', 'info');
+}
+
+// Airdrop SOL for testing
+async function airdropSOL() {
+    try {
+        console.log('Requesting 1000 SOL airdrop...');
+        showStatus('Requesting 1000 SOL airdrop...', 'info');
+
+        const airdropSignature = await connection.requestAirdrop(
+            wallet.publicKey,
+            1000 * LAMPORTS_PER_SOL
+        );
+
+        await connection.confirmTransaction(airdropSignature);
+        console.log('✓ Airdropped 1000 SOL successfully');
+        showStatus('✓ Airdropped 1000 SOL for testing', 'success');
+    } catch (err) {
+        console.error('Airdrop error:', err);
+        // Don't fail the whole wallet loading process if airdrop fails
+        showStatus('Airdrop failed (may already have SOL)', 'info');
+    }
 }
 
 // Update current price
@@ -227,19 +272,32 @@ async function getAssociatedTokenAddress(mint, owner) {
 
 // Update balances
 async function updateBalances() {
-    if (!wallet || !poolData) return;
+    if (!wallet || !poolData) {
+        console.log('updateBalances: wallet or poolData not ready', { wallet: !!wallet, poolData: !!poolData });
+        return;
+    }
 
     try {
         const poolAccountInfo = await connection.getAccountInfo(new PublicKey(CONFIG.POOL_ADDRESS));
-        if (!poolAccountInfo) return;
+        if (!poolAccountInfo) {
+            console.log('updateBalances: pool account not found');
+            return;
+        }
 
         const data = poolAccountInfo.data;
         const xntMint = new PublicKey(data.slice(40, 72));
         const usdcMint = new PublicKey(data.slice(72, 104));
 
+        console.log('updateBalances: mints', { xntMint: xntMint.toString(), usdcMint: usdcMint.toString() });
+
         // Get token accounts
         const userXntAccount = await getAssociatedTokenAddress(xntMint, wallet.publicKey);
         const userUsdcAccount = await getAssociatedTokenAddress(usdcMint, wallet.publicKey);
+
+        console.log('updateBalances: user token accounts', {
+            userXntAccount: userXntAccount.toString(),
+            userUsdcAccount: userUsdcAccount.toString()
+        });
 
         // Get balances
         let xntBalance = 0;
@@ -248,15 +306,17 @@ async function updateBalances() {
         try {
             const xntAccountInfo = await connection.getTokenAccountBalance(userXntAccount);
             xntBalance = parseInt(xntAccountInfo.value.amount);
+            console.log('updateBalances: XNT balance', xntBalance);
         } catch (e) {
-            // Account doesn't exist yet
+            console.log('updateBalances: XNT account does not exist yet', e.message);
         }
 
         try {
             const usdcAccountInfo = await connection.getTokenAccountBalance(userUsdcAccount);
             usdcBalance = parseInt(usdcAccountInfo.value.amount);
+            console.log('updateBalances: USDC balance', usdcBalance);
         } catch (e) {
-            // Account doesn't exist yet
+            console.log('updateBalances: USDC account does not exist yet', e.message);
         }
 
         // Update UI
@@ -302,26 +362,42 @@ function updateQuote() {
     }
 
     const amountWithDecimals = amount * 1e6; // Convert to base units
-
-    // Calculate buy quote (using constant product formula)
     const currentPrice = poolData.price;
     const k = poolData.xntReserve * poolData.usdcReserve;
 
-    // For buy: user pays USDC, gets XNT
-    const newUsdcReserve = poolData.usdcReserve + amountWithDecimals;
-    const newXntReserve = k / newUsdcReserve;
-    const xntOut = poolData.xntReserve - newXntReserve;
-    const effectivePrice = amountWithDecimals / xntOut;
-    const newPrice = newUsdcReserve / newXntReserve;
-    const priceImpact = ((newPrice / currentPrice) - 1) * 100;
+    if (swapDirection === 'buy') {
+        // Buy: user pays USDC, gets XNT
+        const newUsdcReserve = poolData.usdcReserve + amountWithDecimals;
+        const newXntReserve = k / newUsdcReserve;
+        const xntOut = poolData.xntReserve - newXntReserve;
+        const effectivePrice = amountWithDecimals / xntOut;
+        const newPrice = newUsdcReserve / newXntReserve;
+        const priceImpact = ((newPrice / currentPrice) - 1) * 100;
 
-    // Update quote display
-    document.getElementById('quoteDisplay').style.display = 'block';
-    document.getElementById('quotePay').textContent = (amount / 1000).toFixed(1) + 'K USDC';
-    document.getElementById('quoteReceive').textContent = (xntOut / 1e6).toFixed(2) + ' XNT';
-    document.getElementById('quotePrice').textContent = '$' + effectivePrice.toFixed(6);
-    document.getElementById('quotePriceImpact').textContent = (priceImpact >= 0 ? '+' : '') + priceImpact.toFixed(2) + '%';
-    document.getElementById('quoteNewPrice').textContent = '$' + newPrice.toFixed(6);
+        // Update quote display
+        document.getElementById('quoteDisplay').style.display = 'block';
+        document.getElementById('quotePay').textContent = (amount / 1000).toFixed(1) + 'K USDC';
+        document.getElementById('quoteReceive').textContent = (xntOut / 1e6).toFixed(2) + ' XNT';
+        document.getElementById('quotePrice').textContent = '$' + effectivePrice.toFixed(6);
+        document.getElementById('quotePriceImpact').textContent = (priceImpact >= 0 ? '+' : '') + priceImpact.toFixed(2) + '%';
+        document.getElementById('quoteNewPrice').textContent = '$' + newPrice.toFixed(6);
+    } else {
+        // Sell: user pays XNT, gets USDC
+        const newXntReserve = poolData.xntReserve + amountWithDecimals;
+        const newUsdcReserve = k / newXntReserve;
+        const usdcOut = poolData.usdcReserve - newUsdcReserve;
+        const effectivePrice = usdcOut / amountWithDecimals;
+        const newPrice = newUsdcReserve / newXntReserve;
+        const priceImpact = ((newPrice / currentPrice) - 1) * 100;
+
+        // Update quote display
+        document.getElementById('quoteDisplay').style.display = 'block';
+        document.getElementById('quotePay').textContent = (amount / 1000).toFixed(1) + 'K XNT';
+        document.getElementById('quoteReceive').textContent = (usdcOut / 1e6).toFixed(2) + ' USDC';
+        document.getElementById('quotePrice').textContent = '$' + effectivePrice.toFixed(6);
+        document.getElementById('quotePriceImpact').textContent = (priceImpact >= 0 ? '+' : '') + priceImpact.toFixed(2) + '%';
+        document.getElementById('quoteNewPrice').textContent = '$' + newPrice.toFixed(6);
+    }
 }
 
 // Set amount
@@ -348,8 +424,7 @@ async function executeBuy() {
     const amountWithDecimals = Math.floor(amount * 1e6);
 
     try {
-        document.getElementById('buyBtn').disabled = true;
-        document.getElementById('sellBtn').disabled = true;
+        document.getElementById('swapBtn').disabled = true;
         showStatus('🔄 Executing BUY trade...', 'info');
 
         const response = await fetch('http://localhost:3030/api/buy', {
@@ -370,8 +445,7 @@ async function executeBuy() {
     } catch (error) {
         showStatus('❌ Error: ' + error.message, 'error');
     } finally {
-        document.getElementById('buyBtn').disabled = false;
-        document.getElementById('sellBtn').disabled = false;
+        document.getElementById('swapBtn').disabled = false;
     }
 }
 
@@ -390,19 +464,11 @@ async function executeSell() {
         return;
     }
 
-    // For sell, amount is in XNT (not USDC)
-    // Calculate how much XNT we'll get for the USDC amount
-    const usdcAmount = amount * 1e6;
-    const k = poolData.xntReserve * poolData.usdcReserve;
-    const newUsdcReserve = poolData.usdcReserve + usdcAmount;
-    const newXntReserve = k / newUsdcReserve;
-    const xntAmount = poolData.xntReserve - newXntReserve;
-
-    const amountWithDecimals = Math.floor(xntAmount);
+    // Amount is directly in XNT (user input)
+    const amountWithDecimals = Math.floor(amount * 1e6);
 
     try {
-        document.getElementById('buyBtn').disabled = true;
-        document.getElementById('sellBtn').disabled = true;
+        document.getElementById('swapBtn').disabled = true;
         showStatus('🔄 Executing SELL trade...', 'info');
 
         const response = await fetch('http://localhost:3030/api/sell', {
@@ -423,9 +489,34 @@ async function executeSell() {
     } catch (error) {
         showStatus('❌ Error: ' + error.message, 'error');
     } finally {
-        document.getElementById('buyBtn').disabled = false;
-        document.getElementById('sellBtn').disabled = false;
+        document.getElementById('swapBtn').disabled = false;
     }
+}
+
+// Execute swap (routes to buy or sell based on direction)
+async function executeSwap() {
+    if (swapDirection === 'buy') {
+        await executeBuy();
+    } else {
+        await executeSell();
+    }
+}
+
+// Reset trading area
+function resetTrading() {
+    // Clear the trade amount input
+    document.getElementById('tradeAmount').value = '';
+
+    // Hide the quote display
+    document.getElementById('quoteDisplay').style.display = 'none';
+
+    // Reset to buy direction
+    swapDirection = 'buy';
+    document.getElementById('inputToken').textContent = 'USDC';
+    document.getElementById('outputToken').textContent = 'XNT';
+    document.querySelector('.swap-arrow').textContent = '↓';
+
+    showStatus('Trading area cleared', 'info');
 }
 
 // Helper functions
@@ -462,3 +553,6 @@ window.setAmount = setAmount;
 window.updateQuote = updateQuote;
 window.executeBuy = executeBuy;
 window.executeSell = executeSell;
+window.executeSwap = executeSwap;
+window.toggleSwapDirection = toggleSwapDirection;
+window.resetTrading = resetTrading;
