@@ -26,6 +26,7 @@ let totalUsdcReceived = 0;
 let totalXntSold = 0;
 let priceUpdateInterval = null;
 let swapDirection = 'buy'; // 'buy' (USDC→XNT) or 'sell' (XNT→USDC)
+let paymentToken = 'USDC'; // 'USDC' or 'SOL' - which token to use for payment
 
 // Initialize connection
 async function init() {
@@ -139,18 +140,40 @@ function updateWalletUI() {
     }
 }
 
+// Handle payment token change
+function handlePaymentTokenChange() {
+    const select = document.getElementById('paymentTokenSelect');
+    paymentToken = select.value;
+    console.log('Payment token changed to:', paymentToken);
+
+    // Update the input token display based on swap direction and payment token
+    updateTokenDisplay();
+    updateQuote();
+}
+
+// Update token display based on direction and payment method
+function updateTokenDisplay() {
+    if (swapDirection === 'buy') {
+        // Buying XNT
+        document.getElementById('inputToken').textContent = paymentToken;
+        document.getElementById('outputToken').textContent = 'XNT';
+    } else {
+        // Selling XNT
+        document.getElementById('inputToken').textContent = 'XNT';
+        document.getElementById('outputToken').textContent = paymentToken;
+    }
+}
+
 // Toggle swap direction
 function toggleSwapDirection() {
     swapDirection = swapDirection === 'buy' ? 'sell' : 'buy';
 
     // Update UI elements
+    updateTokenDisplay();
+
     if (swapDirection === 'buy') {
-        document.getElementById('inputToken').textContent = 'USDC';
-        document.getElementById('outputToken').textContent = 'XNT';
         document.querySelector('.swap-arrow').textContent = '↓';
     } else {
-        document.getElementById('inputToken').textContent = 'XNT';
-        document.getElementById('outputToken').textContent = 'USDC';
         document.querySelector('.swap-arrow').textContent = '↑';
     }
 
@@ -496,10 +519,155 @@ async function executeSell() {
 
 // Execute swap (routes to buy or sell based on direction)
 async function executeSwap() {
-    if (swapDirection === 'buy') {
-        await executeBuy();
+    if (paymentToken === 'SOL') {
+        // Using SOL: need to wrap/unwrap
+        if (swapDirection === 'buy') {
+            await executeSOLBuy();
+        } else {
+            await executeSOLSell();
+        }
     } else {
-        await executeSell();
+        // Using USDC: direct trading
+        if (swapDirection === 'buy') {
+            await executeBuy();
+        } else {
+            await executeSell();
+        }
+    }
+}
+
+// Execute buy using SOL (wrap SOL→XNT first, then buy with XNT)
+async function executeSOLBuy() {
+    if (!wallet || !poolData) {
+        showStatus('Please wait for wallet and price data to load', 'error');
+        return;
+    }
+
+    const amountInput = document.getElementById('tradeAmount');
+    const solAmount = parseFloat(amountInput.value);
+
+    if (!solAmount || solAmount <= 0) {
+        showStatus('Please enter a valid amount', 'error');
+        return;
+    }
+
+    try {
+        document.getElementById('swapBtn').disabled = true;
+
+        // Step 1: Wrap SOL to XNT
+        showStatus(`Step 1/2: Wrapping ${solAmount} SOL to XNT...`, 'info');
+        const lamports = Math.floor(solAmount * 1e9);
+
+        const wrapResponse = await fetch('/api/wrap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount: lamports,
+                poolAddress: CONFIG.POOL_ADDRESS
+            })
+        });
+
+        const wrapResult = await wrapResponse.json();
+
+        if (!wrapResult.success) {
+            throw new Error('Wrap failed: ' + wrapResult.error);
+        }
+
+        showStatus(`✅ Wrapped ${solAmount} SOL to XNT! TX: ${wrapResult.tx.substring(0, 20)}...`, 'success');
+
+        // Step 2: Buy with the wrapped XNT (converted to USDC value)
+        showStatus(`Step 2/2: Buying XNT with wrapped amount...`, 'info');
+
+        // Since 1 SOL = 1 XNT, we now buy using that XNT value in USDC terms
+        const usdcAmount = solAmount * 1000; // Treat as K USDC
+        const amountWithDecimals = Math.floor(usdcAmount * 1e6);
+
+        const buyResponse = await fetch('/api/buy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: amountWithDecimals })
+        });
+
+        const buyResult = await buyResponse.json();
+
+        if (buyResult.success) {
+            showStatus(`✅ BUY successful! Total: Wrapped ${solAmount} SOL + Bought XNT. TX: ${buyResult.tx.substring(0, 20)}...`, 'success');
+            await updatePrice();
+            await updateBalances();
+        } else {
+            showStatus('❌ Buy failed: ' + buyResult.error, 'error');
+        }
+    } catch (error) {
+        showStatus('❌ Error: ' + error.message, 'error');
+    } finally {
+        document.getElementById('swapBtn').disabled = false;
+    }
+}
+
+// Execute sell using SOL (sell XNT first, then unwrap to SOL)
+async function executeSOLSell() {
+    if (!wallet || !poolData) {
+        showStatus('Please wait for wallet and price data to load', 'error');
+        return;
+    }
+
+    const amountInput = document.getElementById('tradeAmount');
+    const xntAmount = parseFloat(amountInput.value);
+
+    if (!xntAmount || xntAmount <= 0) {
+        showStatus('Please enter a valid amount', 'error');
+        return;
+    }
+
+    try {
+        document.getElementById('swapBtn').disabled = true;
+
+        // Step 1: Sell XNT for USDC
+        showStatus(`Step 1/2: Selling ${xntAmount}K XNT...`, 'info');
+        const amountWithDecimals = Math.floor(xntAmount * 1e3 * 1e6); // K XNT to base units
+
+        const sellResponse = await fetch('/api/sell', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: amountWithDecimals })
+        });
+
+        const sellResult = await sellResponse.json();
+
+        if (!sellResult.success) {
+            throw new Error('Sell failed: ' + sellResult.error);
+        }
+
+        showStatus(`✅ Sold ${xntAmount}K XNT! TX: ${sellResult.tx.substring(0, 20)}...`, 'success');
+
+        // Step 2: Unwrap XNT to SOL (amount to unwrap)
+        showStatus(`Step 2/2: Unwrapping XNT to SOL...`, 'info');
+
+        // Unwrap equivalent amount (user wants SOL back)
+        const unwrapAmount = Math.floor(xntAmount * 1e3 * 1e6); // Same amount in XNT base units
+
+        const unwrapResponse = await fetch('/api/unwrap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount: unwrapAmount,
+                poolAddress: CONFIG.POOL_ADDRESS
+            })
+        });
+
+        const unwrapResult = await unwrapResponse.json();
+
+        if (unwrapResult.success) {
+            showStatus(`✅ SELL successful! Sold XNT + Unwrapped to SOL. TX: ${unwrapResult.tx.substring(0, 20)}...`, 'success');
+            await updatePrice();
+            await updateBalances();
+        } else {
+            showStatus('❌ Unwrap failed: ' + unwrapResult.error, 'error');
+        }
+    } catch (error) {
+        showStatus('❌ Error: ' + error.message, 'error');
+    } finally {
+        document.getElementById('swapBtn').disabled = false;
     }
 }
 

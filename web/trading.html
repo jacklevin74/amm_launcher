@@ -590,6 +590,10 @@
                     <div class="token-input-card">
                         <div class="token-input-header">
                             <span class="input-label" id="inputLabel">You pay</span>
+                            <select id="paymentTokenSelect" onchange="handlePaymentTokenChange()" style="padding: 5px; background: rgba(102, 170, 187, 0.1); border: 1px solid #6ab; color: #6ab; font-family: 'Courier New', monospace; margin-left: 10px;">
+                                <option value="USDC">Pay with USDC</option>
+                                <option value="SOL">Pay with SOL</option>
+                            </select>
                         </div>
                         <div class="token-input-body">
                             <input type="number" id="tradeAmount" class="token-amount-input" placeholder="0.0" min="0" step="1000" value="10000" oninput="updateQuote()">
