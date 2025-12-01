@@ -1,10 +1,11 @@
 // SOL Wrapper App
-const PROGRAM_ID = '2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF';
+const CONFIG = {
+    RPC_URL: 'http://localhost:8899',
+    POOL_ADDRESS: 'C9VdVhmEeyDhqeQYrqwGe3eS9YMighTHXuLyAdk227Hr',
+    PROGRAM_ID: '2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF'
+};
 
-let connection;
-let provider;
-let program;
-let wallet;
+let traderWallet = null;
 
 // Initialize on load
 window.addEventListener('load', async () => {
@@ -21,42 +22,26 @@ window.addEventListener('load', async () => {
         document.getElementById('unwrapReceive').textContent = `${amount.toFixed(2)} SOL`;
     });
 
-    // Check if Phantom is installed
-    if (window.solana?.isPhantom) {
-        console.log('Phantom detected');
-        // Auto-connect if previously connected
-        if (window.solana.isConnected) {
-            await connectWallet();
-        }
-    } else {
-        showStatus('Please install Phantom wallet', 'error');
-    }
+    // Auto-load wallet
+    await loadTraderWallet();
 });
 
-async function connectWallet() {
+async function loadTraderWallet() {
     try {
-        showStatus('Connecting to Phantom...', 'info');
+        showStatus('Loading trader wallet...', 'info');
 
-        const resp = await window.solana.connect();
-        wallet = window.solana;
+        const response = await fetch('/api/trader-wallet');
+        const data = await response.json();
 
-        console.log('Connected:', resp.publicKey.toString());
-        document.getElementById('walletAddress').textContent = resp.publicKey.toString();
-        document.getElementById('connectBtn').textContent = 'Connected ✓';
-        document.getElementById('connectBtn').disabled = true;
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load wallet');
+        }
 
-        // Initialize Anchor
-        connection = new solanaWeb3.Connection('http://localhost:8899', 'confirmed');
-        provider = {
-            connection,
-            publicKey: resp.publicKey,
-            signTransaction: wallet.signTransaction.bind(wallet),
-            signAllTransactions: wallet.signAllTransactions.bind(wallet),
-        };
+        traderWallet = data.address;
+        console.log('Trader wallet loaded:', traderWallet);
 
-        // Fetch IDL
-        const idl = await fetch('/idl/bonding_curve.json').then(r => r.json());
-        program = new anchor.Program(idl, PROGRAM_ID, { connection });
+        document.getElementById('walletAddress').textContent = traderWallet;
+        document.getElementById('connectBtn').style.display = 'none';
 
         // Show panels
         document.getElementById('balancesPanel').style.display = 'block';
@@ -65,73 +50,38 @@ async function connectWallet() {
         // Load balances
         await loadBalances();
 
-        showStatus('Wallet connected successfully!', 'success');
+        showStatus('Wallet loaded successfully!', 'success');
         setTimeout(() => {
             document.getElementById('txStatusPanel').style.display = 'none';
         }, 3000);
 
     } catch (err) {
-        console.error('Connection error:', err);
-        showStatus('Failed to connect wallet: ' + err.message, 'error');
+        console.error('Wallet loading error:', err);
+        showStatus('Failed to load wallet: ' + err.message, 'error');
     }
 }
 
 async function loadBalances() {
     try {
-        // Get SOL balance
-        const solBalance = await connection.getBalance(provider.publicKey);
-        document.getElementById('solBalance').textContent = (solBalance / 1e9).toFixed(4) + ' SOL';
+        const response = await fetch('/api/trader-balances');
+        const data = await response.json();
 
-        // Get XNT balance
-        // First, get the pool to find XNT mint
-        const poolAddress = await getPoolAddress();
-        if (!poolAddress) {
-            document.getElementById('xntBalance').textContent = '0 XNT';
-            return;
-        }
-
-        const poolData = await program.account.pool.fetch(poolAddress);
-        const xntMint = poolData.xntMint;
-
-        // Get user's XNT token account
-        const userXnt = await getAssociatedTokenAddress(xntMint, provider.publicKey);
-
-        try {
-            const tokenAccount = await connection.getTokenAccountBalance(userXnt);
-            const xntAmount = tokenAccount.value.uiAmount || 0;
-            document.getElementById('xntBalance').textContent = xntAmount.toFixed(4) + ' XNT';
-        } catch (e) {
-            // Account doesn't exist yet
-            document.getElementById('xntBalance').textContent = '0 XNT';
+        if (data.success) {
+            document.getElementById('solBalance').textContent = `${data.balances.sol.toFixed(4)} SOL`;
+            document.getElementById('xntBalance').textContent = `${data.balances.xnt.toFixed(4)} XNT`;
+        } else {
+            console.error('Failed to load balances:', data.error);
+            document.getElementById('solBalance').textContent = '- SOL';
+            document.getElementById('xntBalance').textContent = '- XNT';
         }
 
     } catch (err) {
         console.error('Error loading balances:', err);
+        document.getElementById('solBalance').textContent = '- SOL';
+        document.getElementById('xntBalance').textContent = '- XNT';
     }
 }
 
-async function getPoolAddress() {
-    try {
-        // Try to fetch from config API
-        const config = await fetch('/api/config').then(r => r.json());
-        return new solanaWeb3.PublicKey(config.poolAddress);
-    } catch (e) {
-        console.error('Could not fetch pool address:', e);
-        return null;
-    }
-}
-
-async function getAssociatedTokenAddress(mint, owner) {
-    const [address] = await solanaWeb3.PublicKey.findProgramAddress(
-        [
-            owner.toBuffer(),
-            new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
-            mint.toBuffer(),
-        ],
-        new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
-    );
-    return address;
-}
 
 async function wrapSol() {
     try {
@@ -147,80 +97,30 @@ async function wrapSol() {
         showStatus('Wrapping SOL...', 'info');
         document.getElementById('wrapBtn').disabled = true;
 
-        // Get pool address
-        const poolAddress = await getPoolAddress();
-        if (!poolAddress) {
-            throw new Error('Pool not found');
-        }
-
-        const poolData = await program.account.pool.fetch(poolAddress);
-        const xntMint = poolData.xntMint;
-
-        // Derive accounts
-        const [solVault] = await solanaWeb3.PublicKey.findProgramAddress(
-            [Buffer.from('sol_vault'), poolAddress.toBuffer()],
-            program.programId
-        );
-
-        const poolXnt = poolData.poolXnt;
-        const userXnt = await getAssociatedTokenAddress(xntMint, provider.publicKey);
-
-        // Check if user XNT account exists, create if not
-        const accountInfo = await connection.getAccountInfo(userXnt);
-        let preInstructions = [];
-
-        if (!accountInfo) {
-            console.log('Creating user XNT token account...');
-            const createAtaIx = new solanaWeb3.TransactionInstruction({
-                keys: [
-                    { pubkey: provider.publicKey, isSigner: true, isWritable: true },
-                    { pubkey: userXnt, isSigner: false, isWritable: true },
-                    { pubkey: provider.publicKey, isSigner: false, isWritable: false },
-                    { pubkey: xntMint, isSigner: false, isWritable: false },
-                    { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
-                    { pubkey: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'), isSigner: false, isWritable: false },
-                ],
-                programId: new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL'),
-                data: Buffer.from([]),
-            });
-            preInstructions.push(createAtaIx);
-        }
-
-        // Build wrap transaction
-        const tx = await program.methods
-            .wrapSol(new anchor.BN(lamports))
-            .accounts({
-                user: provider.publicKey,
-                pool: poolAddress,
-                solVault: solVault,
-                poolXnt: poolXnt,
-                userXnt: userXnt,
-                tokenProgram: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
-                systemProgram: solanaWeb3.SystemProgram.programId,
+        // Call server API
+        const response = await fetch('/api/wrap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount: lamports,
+                poolAddress: CONFIG.POOL_ADDRESS
             })
-            .preInstructions(preInstructions)
-            .transaction();
+        });
 
-        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-        tx.feePayer = provider.publicKey;
+        const data = await response.json();
 
-        // Sign and send
-        const signed = await wallet.signTransaction(tx);
-        const txid = await connection.sendRawTransaction(signed.serialize());
+        if (data.success) {
+            showStatus(`✓ Wrapped ${solAmount} SOL → ${solAmount} XNT! TX: ${data.tx.substring(0, 8)}...`, 'success');
 
-        showStatus(`Transaction sent: ${txid.substring(0, 8)}...`, 'info');
+            // Reload balances
+            await loadBalances();
 
-        // Wait for confirmation
-        await connection.confirmTransaction(txid, 'confirmed');
-
-        showStatus(`✓ Wrapped ${solAmount} SOL → ${solAmount} XNT!`, 'success');
-
-        // Reload balances
-        await loadBalances();
-
-        // Clear input
-        document.getElementById('wrapAmount').value = '';
-        document.getElementById('wrapReceive').textContent = '0 XNT';
+            // Clear input
+            document.getElementById('wrapAmount').value = '';
+            document.getElementById('wrapReceive').textContent = '0 XNT';
+        } else {
+            throw new Error(data.error || 'Wrap transaction failed');
+        }
 
     } catch (err) {
         console.error('Wrap error:', err);
@@ -244,57 +144,30 @@ async function unwrapSol() {
         showStatus('Unwrapping XNT...', 'info');
         document.getElementById('unwrapBtn').disabled = true;
 
-        // Get pool address
-        const poolAddress = await getPoolAddress();
-        if (!poolAddress) {
-            throw new Error('Pool not found');
-        }
-
-        const poolData = await program.account.pool.fetch(poolAddress);
-        const xntMint = poolData.xntMint;
-
-        // Derive accounts
-        const [solVault] = await solanaWeb3.PublicKey.findProgramAddress(
-            [Buffer.from('sol_vault'), poolAddress.toBuffer()],
-            program.programId
-        );
-
-        const poolXnt = poolData.poolXnt;
-        const userXnt = await getAssociatedTokenAddress(xntMint, provider.publicKey);
-
-        // Build unwrap transaction
-        const tx = await program.methods
-            .unwrapSol(new anchor.BN(xntBaseUnits))
-            .accounts({
-                user: provider.publicKey,
-                pool: poolAddress,
-                solVault: solVault,
-                poolXnt: poolXnt,
-                userXnt: userXnt,
-                tokenProgram: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+        // Call server API
+        const response = await fetch('/api/unwrap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount: xntBaseUnits,
+                poolAddress: CONFIG.POOL_ADDRESS
             })
-            .transaction();
+        });
 
-        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-        tx.feePayer = provider.publicKey;
+        const data = await response.json();
 
-        // Sign and send
-        const signed = await wallet.signTransaction(tx);
-        const txid = await connection.sendRawTransaction(signed.serialize());
+        if (data.success) {
+            showStatus(`✓ Unwrapped ${xntAmount} XNT → ${xntAmount} SOL! TX: ${data.tx.substring(0, 8)}...`, 'success');
 
-        showStatus(`Transaction sent: ${txid.substring(0, 8)}...`, 'info');
+            // Reload balances
+            await loadBalances();
 
-        // Wait for confirmation
-        await connection.confirmTransaction(txid, 'confirmed');
-
-        showStatus(`✓ Unwrapped ${xntAmount} XNT → ${xntAmount} SOL!`, 'success');
-
-        // Reload balances
-        await loadBalances();
-
-        // Clear input
-        document.getElementById('unwrapAmount').value = '';
-        document.getElementById('unwrapReceive').textContent = '0 SOL';
+            // Clear input
+            document.getElementById('unwrapAmount').value = '';
+            document.getElementById('unwrapReceive').textContent = '0 SOL';
+        } else {
+            throw new Error(data.error || 'Unwrap transaction failed');
+        }
 
     } catch (err) {
         console.error('Unwrap error:', err);

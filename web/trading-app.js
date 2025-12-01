@@ -301,7 +301,7 @@ async function updateBalances() {
 
         // Get balances
         let xntBalance = 0;
-        let usdcBalance = 0;
+        let solBalance = 0;
 
         try {
             const xntAccountInfo = await connection.getTokenAccountBalance(userXntAccount);
@@ -311,21 +311,22 @@ async function updateBalances() {
             console.log('updateBalances: XNT account does not exist yet', e.message);
         }
 
+        // Get SOL balance
         try {
-            const usdcAccountInfo = await connection.getTokenAccountBalance(userUsdcAccount);
-            usdcBalance = parseInt(usdcAccountInfo.value.amount);
-            console.log('updateBalances: USDC balance', usdcBalance);
+            solBalance = await connection.getBalance(wallet.publicKey);
+            console.log('updateBalances: SOL balance', solBalance);
         } catch (e) {
-            console.log('updateBalances: USDC account does not exist yet', e.message);
+            console.log('updateBalances: Error getting SOL balance', e.message);
         }
 
         // Update UI
         document.getElementById('xntBalance').textContent = (xntBalance / 1e6).toLocaleString();
-        document.getElementById('usdcBalance').textContent = (usdcBalance / 1e6).toLocaleString();
+        document.getElementById('solBalance').textContent = (solBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         // Update position summary
         const xntValueUSDC = (xntBalance / 1e6) * poolData.price;
-        const totalPortfolio = xntValueUSDC + (usdcBalance / 1e6);
+        const solValueUSDC = (solBalance / 1e9) * poolData.price; // 1 SOL = 1 XNT = poolData.price USDC
+        const totalPortfolio = xntValueUSDC + solValueUSDC;
 
         document.getElementById('xntValueUSDC').textContent = '$' + xntValueUSDC.toLocaleString();
         document.getElementById('totalPortfolio').textContent = '$' + totalPortfolio.toLocaleString();

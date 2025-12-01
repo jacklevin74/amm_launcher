@@ -802,9 +802,28 @@ pub mod bonding_curve {
 
         msg!("Returning {} SOL", sol_amount as f64 / 1_000_000_000.0);
 
-        // Transfer SOL from vault to user
-        **ctx.accounts.sol_vault.to_account_info().try_borrow_mut_lamports()? -= sol_amount;
-        **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += sol_amount;
+        // Transfer SOL from vault to user using PDA signer
+        let pool_key = pool.key();
+        let sol_vault_seeds = &[
+            b"sol_vault",
+            pool_key.as_ref(),
+            &[pool.sol_vault_bump],
+        ];
+        let signer = &[&sol_vault_seeds[..]];
+
+        let ix = anchor_lang::solana_program::system_instruction::transfer(
+            &ctx.accounts.sol_vault.key(),
+            &ctx.accounts.user.key(),
+            sol_amount,
+        );
+        anchor_lang::solana_program::program::invoke_signed(
+            &ix,
+            &[
+                ctx.accounts.sol_vault.to_account_info(),
+                ctx.accounts.user.to_account_info(),
+            ],
+            signer,
+        )?;
 
         msg!("✅ Unwrapped {} XNT into {} SOL", xnt_amount as f64 / 1_000_000.0, sol_amount as f64 / 1_000_000_000.0);
 
@@ -1335,6 +1354,7 @@ pub struct UnwrapSol<'info> {
     pub user_xnt: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]

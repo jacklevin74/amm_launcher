@@ -253,15 +253,23 @@ const fs = require('fs');
 "`;
 
         exec(cmd, (error, stdout, stderr) => {
-          if (error) {
-            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-            res.end(JSON.stringify({ success: false, error: stderr || error.message }));
-            return;
-          }
+          try {
+            // Try to parse the last line of stdout as JSON
+            const lines = stdout.trim().split('\n');
+            const lastLine = lines[lines.length - 1];
+            const result = JSON.parse(lastLine);
 
-          const result = JSON.parse(stdout.trim().split('\\n').pop());
-          res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-          res.end(JSON.stringify(result));
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify(result));
+          } catch (parseError) {
+            // If parsing fails, return the error with details
+            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({
+              success: false,
+              error: 'Transaction failed - see details',
+              details: stdout || stderr || (error ? error.message : 'Unknown error')
+            }));
+          }
         });
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -321,15 +329,23 @@ const fs = require('fs');
 "`;
 
         exec(cmd, (error, stdout, stderr) => {
-          if (error) {
-            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-            res.end(JSON.stringify({ success: false, error: stderr || error.message }));
-            return;
-          }
+          try {
+            // Try to parse the last line of stdout as JSON
+            const lines = stdout.trim().split('\n');
+            const lastLine = lines[lines.length - 1];
+            const result = JSON.parse(lastLine);
 
-          const result = JSON.parse(stdout.trim().split('\\n').pop());
-          res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-          res.end(JSON.stringify(result));
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify(result));
+          } catch (parseError) {
+            // If parsing fails, return the error with details
+            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({
+              success: false,
+              error: 'Transaction failed - see details',
+              details: stdout || stderr || (error ? error.message : 'Unknown error')
+            }));
+          }
         });
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -360,6 +376,251 @@ const fs = require('fs');
           const result = JSON.parse(stdout.trim().split('\n').pop());
           res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
           res.end(JSON.stringify(result));
+        });
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ success: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // API endpoint to get trader wallet address
+  if (parsedUrl.pathname === '/api/trader-wallet') {
+    const cmd = `cd /Users/yakovlevin/dev/lottery_amm && node -e "const fs = require('fs'); const data = JSON.parse(fs.readFileSync('/tmp/trader-wallet.json', 'utf8')); const { Keypair } = require('@solana/web3.js'); const kp = Keypair.fromSecretKey(new Uint8Array(data)); console.log(JSON.stringify({ success: true, address: kp.publicKey.toString() }));"`;
+
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ success: false, error: stderr || error.message }));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(stdout.trim());
+    });
+    return;
+  }
+
+  // API endpoint to get trader balances
+  if (parsedUrl.pathname === '/api/trader-balances') {
+    const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
+const anchor = require('@coral-xyz/anchor');
+const { getAccount } = require('@solana/spl-token');
+const fs = require('fs');
+
+(async () => {
+  const connection = new anchor.web3.Connection('http://localhost:8899', 'confirmed');
+  const traderData = JSON.parse(fs.readFileSync('/tmp/trader-wallet.json', 'utf8'));
+  const trader = anchor.web3.Keypair.fromSecretKey(new Uint8Array(traderData));
+
+  // Get SOL balance
+  const solBalance = await connection.getBalance(trader.publicKey);
+
+  // Get pool to find XNT mint
+  const walletPath = process.env.ANCHOR_WALLET || process.env.HOME + '/.config/solana/id.json';
+  const mainWallet = anchor.web3.Keypair.fromSecretKey(Buffer.from(JSON.parse(fs.readFileSync(walletPath, 'utf-8'))));
+  const wallet = new anchor.Wallet(mainWallet);
+  const provider = new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+  anchor.setProvider(provider);
+  const program = anchor.workspace.BondingCurve;
+
+  const poolAddress = new anchor.web3.PublicKey('C9VdVhmEeyDhqeQYrqwGe3eS9YMighTHXuLyAdk227Hr');
+  const pool = await program.account.pool.fetch(poolAddress);
+  const xntMint = pool.xntMint;
+
+  // Get trader XNT ATA
+  const [traderXnt] = anchor.web3.PublicKey.findProgramAddressSync(
+    [
+      trader.publicKey.toBuffer(),
+      new anchor.web3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
+      xntMint.toBuffer(),
+    ],
+    new anchor.web3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+  );
+
+  let xntBalance = 0;
+  try {
+    const xntAccount = await getAccount(connection, traderXnt);
+    xntBalance = Number(xntAccount.amount) / 1e6;
+  } catch (e) {
+    // Account doesn't exist yet
+  }
+
+  console.log(JSON.stringify({
+    success: true,
+    balances: {
+      sol: solBalance / 1e9,
+      xnt: xntBalance
+    }
+  }));
+})().catch(e => console.log(JSON.stringify({ success: false, error: e.message })));
+"`;
+
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ success: false, error: stderr || error.message }));
+        return;
+      }
+
+      const result = JSON.parse(stdout.trim().split('\\n').pop());
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify(result));
+    });
+    return;
+  }
+
+  // API endpoint to wrap SOL
+  if (parsedUrl.pathname === '/api/wrap' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', () => {
+      try {
+        const { amount, poolAddress } = JSON.parse(body);
+
+        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
+const anchor = require('@coral-xyz/anchor');
+const { TOKEN_PROGRAM_ID, getOrCreateAssociatedTokenAccount } = require('@solana/spl-token');
+const { Connection, Keypair, PublicKey, Transaction, TransactionInstruction, SystemProgram } = require('@solana/web3.js');
+const fs = require('fs');
+
+(async () => {
+  const connection = new Connection('http://localhost:8899', 'confirmed');
+  const traderData = JSON.parse(fs.readFileSync('/tmp/trader-wallet.json', 'utf8'));
+  const trader = Keypair.fromSecretKey(new Uint8Array(traderData));
+
+  const walletPath = process.env.ANCHOR_WALLET || process.env.HOME + '/.config/solana/id.json';
+  const mainWallet = Keypair.fromSecretKey(Buffer.from(JSON.parse(fs.readFileSync(walletPath, 'utf-8'))));
+  const wallet = new anchor.Wallet(mainWallet);
+  const provider = new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+  anchor.setProvider(provider);
+  const program = anchor.workspace.BondingCurve;
+
+  const poolPubkey = new PublicKey('${poolAddress}');
+  const pool = await program.account.pool.fetch(poolPubkey);
+  const xntMint = pool.xntMint;
+
+  const traderXnt = await getOrCreateAssociatedTokenAccount(connection, mainWallet, xntMint, trader.publicKey);
+
+  const tx = await program.methods
+    .wrapSol(new anchor.BN(${amount}))
+    .accountsPartial({
+      user: trader.publicKey,
+      pool: poolPubkey,
+      poolXnt: pool.poolXnt,
+      userXnt: traderXnt.address,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .signers([trader])
+    .rpc();
+
+  console.log(JSON.stringify({ success: true, tx }));
+})().catch(e => console.log(JSON.stringify({ success: false, error: e.message })));
+"`;
+
+        exec(cmd, (error, stdout, stderr) => {
+          try {
+            // Try to parse the last line of stdout as JSON
+            const lines = stdout.trim().split('\n');
+            const lastLine = lines[lines.length - 1];
+            const result = JSON.parse(lastLine);
+
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify(result));
+          } catch (parseError) {
+            // If parsing fails, return the error with details
+            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({
+              success: false,
+              error: 'Transaction failed - see details',
+              details: stdout || stderr || (error ? error.message : 'Unknown error')
+            }));
+          }
+        });
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ success: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // API endpoint to unwrap SOL
+  if (parsedUrl.pathname === '/api/unwrap' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', () => {
+      try {
+        const { amount, poolAddress } = JSON.parse(body);
+
+        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
+const anchor = require('@coral-xyz/anchor');
+const { TOKEN_PROGRAM_ID, getOrCreateAssociatedTokenAccount } = require('@solana/spl-token');
+const { Connection, Keypair, PublicKey } = require('@solana/web3.js');
+const fs = require('fs');
+
+(async () => {
+  const connection = new Connection('http://localhost:8899', 'confirmed');
+  const traderData = JSON.parse(fs.readFileSync('/tmp/trader-wallet.json', 'utf8'));
+  const trader = Keypair.fromSecretKey(new Uint8Array(traderData));
+
+  const walletPath = process.env.ANCHOR_WALLET || process.env.HOME + '/.config/solana/id.json';
+  const mainWallet = Keypair.fromSecretKey(Buffer.from(JSON.parse(fs.readFileSync(walletPath, 'utf-8'))));
+  const wallet = new anchor.Wallet(mainWallet);
+  const provider = new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+  anchor.setProvider(provider);
+  const program = anchor.workspace.BondingCurve;
+
+  const poolPubkey = new PublicKey('${poolAddress}');
+  const pool = await program.account.pool.fetch(poolPubkey);
+  const xntMint = pool.xntMint;
+
+  // Derive sol_vault PDA
+  const [solVault] = PublicKey.findProgramAddressSync(
+    [Buffer.from('sol_vault'), poolPubkey.toBuffer()],
+    program.programId
+  );
+
+  const traderXnt = await getOrCreateAssociatedTokenAccount(connection, mainWallet, xntMint, trader.publicKey);
+
+  const tx = await program.methods
+    .unwrapSol(new anchor.BN(${amount}))
+    .accountsPartial({
+      user: trader.publicKey,
+      pool: poolPubkey,
+      solVault: solVault,
+      poolXnt: pool.poolXnt,
+      userXnt: traderXnt.address,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: anchor.web3.SystemProgram.programId,
+    })
+    .signers([trader])
+    .rpc();
+
+  console.log(JSON.stringify({ success: true, tx }));
+})().catch(e => console.log(JSON.stringify({ success: false, error: e.message })));
+"`;
+
+        exec(cmd, (error, stdout, stderr) => {
+          try {
+            // Try to parse the last line of stdout as JSON
+            const lines = stdout.trim().split('\n');
+            const lastLine = lines[lines.length - 1];
+            const result = JSON.parse(lastLine);
+
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify(result));
+          } catch (parseError) {
+            // If parsing fails, return the error with details
+            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({
+              success: false,
+              error: 'Transaction failed - see details',
+              details: stdout || stderr || (error ? error.message : 'Unknown error')
+            }));
+          }
         });
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
