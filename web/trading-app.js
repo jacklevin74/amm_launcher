@@ -6,11 +6,11 @@ const { Connection, Keypair, PublicKey, Transaction, SystemProgram, LAMPORTS_PER
 // Configuration
 const CONFIG = {
     RPC_URL: 'http://localhost:8899',
-    POOL_ADDRESS: 'DftpSEe5zukxPJJ2S3rJh635YvizsbRskZYZEV3MvWkT', // New pool address
-    PROGRAM_ID: '96dn2QeBXtjEd9tDBDfJb5qw6AtfAS3TEQQyfr9Ark1Y',
+    POOL_ADDRESS: 'Erv5YtP4vtBdJxG7Dh44vpjm5w5yJUmmyESpqzQwvFfc', // Pool with floor defense
+    PROGRAM_ID: '2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF',
     TOKEN_PROGRAM_ID: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
     ASSOCIATED_TOKEN_PROGRAM_ID: 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
-    CEILING_RESERVE_XNT: '2Ckf88dRPontfyTnPYgppEj9mn2ebPHCRvrURLCa4Pnh', // Ceiling reserve XNT account
+    CEILING_RESERVE_XNT: 'DQgCw7F2TZch4fyXcRYh7bRrJZ6xipD4RrBaDAmxWmq1', // Ceiling reserve XNT account
     AIRDROP_AMOUNT: 100_000 * 1e6, // 100K USDC (6 decimals)
     POLL_INTERVAL: 2000, // Update UI every 2 seconds
 };

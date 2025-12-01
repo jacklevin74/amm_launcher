@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XNT Admin Panel - Reserve Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0e27;
+            color: #00ff41;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px;
+            border: 2px solid #00ff41;
+            margin-bottom: 20px;
+            background: rgba(0, 255, 65, 0.05);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            color: #00ffff;
+            font-size: 0.9em;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            border: 2px solid #00ff41;
+            padding: 20px;
+            background: rgba(0, 255, 65, 0.02);
+        }
+
+        .panel h2 {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #00ff41;
+            font-size: 1.3em;
+        }
+
+        .auth-section {
+            background: rgba(0, 255, 65, 0.1);
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 3px solid #00ff41;
+        }
+
+        .auth-section h3 {
+            color: #00ffff;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .wallet-info {
+            margin: 10px 0;
+        }
+
+        .wallet-info .label {
+            color: #00ffff;
+            font-size: 0.9em;
+            margin-bottom: 3px;
+        }
+
+        .wallet-info .value {
+            font-size: 0.85em;
+            word-break: break-all;
+            opacity: 0.9;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            background: rgba(0, 255, 65, 0.1);
+            padding: 15px;
+            text-align: center;
+            border: 1px solid #00ff41;
+        }
+
+        .stat-item .label {
+            color: #00ffff;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .stat-item .value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .action-section {
+            margin-bottom: 15px;
+        }
+
+        .action-section h3 {
+            color: #00ffff;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(0, 255, 65, 0.3);
+        }
+
+        .action-section p {
+            font-size: 0.85em;
+            opacity: 0.8;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #00ffff;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(0, 255, 65, 0.05);
+            border: 1px solid #00ff41;
+            color: #00ff41;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #00ffff;
+            background: rgba(0, 255, 65, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 255, 65, 0.1);
+            border: 2px solid #00ff41;
+            color: #00ff41;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 5px;
+        }
+
+        .btn:hover {
+            background: rgba(0, 255, 65, 0.2);
+            border-color: #00ffff;
+            color: #00ffff;
+        }
+
+        .btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .btn-danger {
+            border-color: #ff4141;
+            color: #ff4141;
+            background: rgba(255, 65, 65, 0.1);
+        }
+
+        .btn-danger:hover {
+            background: rgba(255, 65, 65, 0.2);
+            border-color: #ff6161;
+        }
+
+        .alert {
+            padding: 12px;
+            margin-bottom: 15px;
+            border-left: 3px solid;
+            font-size: 0.9em;
+        }
+
+        .alert-success {
+            background: rgba(0, 255, 65, 0.1);
+            border-color: #00ff41;
+            color: #00ff41;
+        }
+
+        .alert-error {
+            background: rgba(255, 65, 65, 0.1);
+            border-color: #ff4141;
+            color: #ff4141;
+        }
+
+        .alert-warning {
+            background: rgba(255, 255, 65, 0.1);
+            border-color: #ffff41;
+            color: #ffff41;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .tx-link {
+            color: #00ffff;
+            text-decoration: underline;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .loading {
+            animation: blink 1s infinite;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .section-divider {
+            height: 1px;
+            background: rgba(0, 255, 65, 0.3);
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>╔═══ XNT ADMIN PANEL ═══╗</h1>
+            <p class="subtitle">CEILING RESERVE MANAGEMENT SYSTEM</p>
+        </div>
+
+        <!-- Authentication Section -->
+        <div class="panel full-width">
+            <h2>▼ AUTHENTICATION STATUS</h2>
+            <div class="auth-section">
+                <h3>🔐 Admin Credentials</h3>
+                <div class="wallet-info">
+                    <div class="label">Admin Wallet:</div>
+                    <div class="value" id="adminWallet">Loading...</div>
+                </div>
+                <div class="wallet-info">
+                    <div class="label">Pool Authority:</div>
+                    <div class="value" id="poolAuthority">Loading...</div>
+                </div>
+                <div id="authStatus" style="margin-top: 10px;"></div>
+            </div>
+        </div>
+
+        <!-- Reserve Statistics -->
+        <div class="panel full-width" id="reservePanel" style="display: none;">
+            <h2>▼ RESERVE STATISTICS</h2>
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="label">RESERVE BALANCE</div>
+                    <div class="value" id="reserveBalance">-</div>
+                </div>
+                <div class="stat-item">
+                    <div class="label">POOL XNT RESERVE</div>
+                    <div class="value" id="poolXntReserve">-</div>
+                </div>
+                <div class="stat-item">
+                    <div class="label">CURRENT PRICE</div>
+                    <div class="value" id="currentPrice">$-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Management Actions -->
+        <div class="grid" id="actionsPanel" style="display: none;">
+            <!-- Deposit Section -->
+            <div class="panel">
+                <h2>▼ DEPOSIT XNT</h2>
+                <div class="action-section">
+                    <p>Add XNT tokens to the ceiling reserve. Tokens will be automatically injected when price > $2.00.</p>
+                    <div class="form-group">
+                        <label>Amount (XNT):</label>
+                        <input type="number" id="depositAmount" placeholder="Enter amount..." step="1">
+                    </div>
+                    <button class="btn" id="depositBtn" onclick="depositToReserve()">
+                        &gt; DEPOSIT TO RESERVE
+                    </button>
+                </div>
+            </div>
+
+            <!-- Withdraw Section -->
+            <div class="panel">
+                <h2>▼ WITHDRAW XNT</h2>
+                <div class="action-section">
+                    <p>Remove XNT tokens from the ceiling reserve for rebalancing or emergency purposes.</p>
+                    <div class="form-group">
+                        <label>Amount (XNT):</label>
+                        <input type="number" id="withdrawAmount" placeholder="Enter amount..." step="1">
+                    </div>
+                    <button class="btn btn-danger" id="withdrawBtn" onclick="withdrawFromReserve()">
+                        &gt; WITHDRAW FROM RESERVE
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transaction Status -->
+        <div class="panel full-width" id="txStatusPanel" style="display: none;">
+            <h2>▼ TRANSACTION STATUS</h2>
+            <div id="txStatus"></div>
+        </div>
+    </div>
+
+    <script src="admin-app.js"></script>
+</body>
+</html>

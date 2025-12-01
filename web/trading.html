@@ -13,8 +13,8 @@
 
         body {
             font-family: 'Courier New', monospace;
-            background: #0a0e27;
-            color: #00ff41;
+            background: #0a0e1a;
+            color: #6ab;
             padding: 20px;
             line-height: 1.6;
         }
@@ -27,14 +27,15 @@
         .header {
             text-align: center;
             padding: 20px;
-            border: 2px solid #00ff41;
+            border: 1px solid #6ab;
             margin-bottom: 20px;
-            background: rgba(0, 255, 65, 0.05);
+            background: rgba(102, 170, 187, 0.03);
         }
 
         .header h1 {
             font-size: 2em;
             margin-bottom: 10px;
+            color: #6ab;
         }
 
         .grid {
@@ -45,27 +46,28 @@
         }
 
         .panel {
-            border: 2px solid #00ff41;
+            border: 1px solid #6ab;
             padding: 20px;
-            background: rgba(0, 255, 65, 0.02);
+            background: rgba(102, 170, 187, 0.02);
         }
 
         .panel h2 {
             margin-bottom: 15px;
             padding-bottom: 10px;
-            border-bottom: 1px solid #00ff41;
+            border-bottom: 1px solid #6ab;
             font-size: 1.3em;
+            color: #8bc;
         }
 
         .wallet-info {
-            background: rgba(0, 255, 65, 0.1);
+            background: rgba(102, 170, 187, 0.05);
             padding: 15px;
             margin: 10px 0;
-            border-left: 3px solid #00ff41;
+            border-left: 2px solid #6ab;
         }
 
         .wallet-info .label {
-            color: #00ffff;
+            color: #8bc;
             font-size: 0.9em;
         }
 
@@ -73,6 +75,7 @@
             font-size: 1.2em;
             margin-top: 5px;
             word-break: break-all;
+            color: #6ab;
         }
 
         .balance-grid {
@@ -83,14 +86,14 @@
         }
 
         .balance-item {
-            background: rgba(0, 255, 65, 0.1);
+            background: rgba(102, 170, 187, 0.05);
             padding: 15px;
             text-align: center;
-            border: 1px solid #00ff41;
+            border: 1px solid #6ab;
         }
 
         .balance-item .label {
-            color: #00ffff;
+            color: #8bc;
             font-size: 0.9em;
             margin-bottom: 5px;
         }
@@ -98,24 +101,25 @@
         .balance-item .amount {
             font-size: 1.5em;
             font-weight: bold;
+            color: #6ab;
         }
 
         .price-display {
-            background: rgba(0, 255, 65, 0.1);
+            background: rgba(102, 170, 187, 0.05);
             padding: 20px;
             text-align: center;
             margin: 15px 0;
-            border: 2px solid #00ff41;
+            border: 1px solid #6ab;
         }
 
         .price-display .current-price {
             font-size: 2.5em;
             font-weight: bold;
-            color: #00ff41;
+            color: #6ab;
         }
 
         .price-display .price-label {
-            color: #00ffff;
+            color: #8bc;
             margin-bottom: 10px;
         }
 
@@ -124,11 +128,11 @@
             justify-content: space-between;
             margin-top: 15px;
             padding-top: 15px;
-            border-top: 1px solid #00ff41;
+            border-top: 1px solid #6ab;
         }
 
         .price-range span {
-            color: #00ffff;
+            color: #8bc;
         }
 
         .trade-form {
@@ -142,30 +146,31 @@
         .form-group label {
             display: block;
             margin-bottom: 8px;
-            color: #00ffff;
+            color: #8bc;
             font-size: 0.95em;
         }
 
         .form-group input {
             width: 100%;
             padding: 12px;
-            background: rgba(0, 255, 65, 0.05);
-            border: 2px solid #00ff41;
-            color: #00ff41;
+            background: rgba(102, 170, 187, 0.03);
+            border: 1px solid #6ab;
+            color: #6ab;
             font-family: 'Courier New', monospace;
             font-size: 1.1em;
         }
 
         .form-group input:focus {
             outline: none;
-            background: rgba(0, 255, 65, 0.1);
+            background: rgba(102, 170, 187, 0.05);
+            border-color: #8bc;
         }
 
         .quote-display {
-            background: rgba(0, 255, 65, 0.1);
+            background: rgba(102, 170, 187, 0.05);
             padding: 15px;
             margin: 15px 0;
-            border-left: 3px solid #00ffff;
+            border-left: 2px solid #8bc;
         }
 
         .quote-display .quote-item {
@@ -175,11 +180,11 @@
         }
 
         .quote-display .quote-label {
-            color: #00ffff;
+            color: #8bc;
         }
 
         .quote-display .quote-value {
-            color: #00ff41;
+            color: #6ab;
             font-weight: bold;
         }
 
@@ -207,43 +212,43 @@
         }
 
         .btn-buy {
-            background: rgba(0, 255, 255, 0.1);
-            border-color: #00ffff;
-            color: #00ffff;
+            background: rgba(102, 170, 187, 0.08);
+            border-color: #8bc;
+            color: #8bc;
         }
 
         .btn-buy:hover:not(:disabled) {
-            background: rgba(0, 255, 255, 0.3);
+            background: rgba(136, 187, 204, 0.15);
         }
 
         .btn-sell {
-            background: rgba(255, 0, 0, 0.1);
-            border-color: #ff0040;
-            color: #ff0040;
+            background: rgba(153, 102, 102, 0.08);
+            border-color: #c96;
+            color: #c96;
         }
 
         .btn-sell:hover:not(:disabled) {
-            background: rgba(255, 0, 0, 0.3);
+            background: rgba(204, 153, 102, 0.15);
         }
 
         .btn-primary {
-            background: rgba(0, 255, 65, 0.1);
-            border-color: #00ff41;
-            color: #00ff41;
+            background: rgba(102, 170, 187, 0.08);
+            border-color: #6ab;
+            color: #6ab;
         }
 
         .btn-primary:hover:not(:disabled) {
-            background: rgba(0, 255, 65, 0.3);
+            background: rgba(102, 170, 187, 0.15);
         }
 
         .btn-secondary {
-            background: rgba(255, 165, 0, 0.1);
-            border-color: #ffa500;
-            color: #ffa500;
+            background: rgba(153, 136, 102, 0.08);
+            border-color: #ba9;
+            color: #ba9;
         }
 
         .btn-secondary:hover:not(:disabled) {
-            background: rgba(255, 165, 0, 0.3);
+            background: rgba(187, 170, 153, 0.15);
         }
 
         .btn-full {
@@ -253,26 +258,26 @@
         .status {
             padding: 12px;
             margin: 15px 0;
-            border-left: 3px solid;
+            border-left: 2px solid;
             font-size: 0.95em;
         }
 
         .status.success {
-            background: rgba(0, 255, 65, 0.1);
-            border-color: #00ff41;
-            color: #00ff41;
+            background: rgba(102, 170, 187, 0.08);
+            border-color: #6ab;
+            color: #6ab;
         }
 
         .status.error {
-            background: rgba(255, 0, 0, 0.1);
-            border-color: #ff0040;
-            color: #ff0040;
+            background: rgba(204, 153, 102, 0.08);
+            border-color: #c96;
+            color: #c96;
         }
 
         .status.info {
-            background: rgba(0, 255, 255, 0.1);
-            border-color: #00ffff;
-            color: #00ffff;
+            background: rgba(136, 187, 204, 0.08);
+            border-color: #8bc;
+            color: #8bc;
         }
 
         .trade-history {
@@ -285,12 +290,12 @@
             padding: 10px;
             margin: 8px 0;
             border-left: 3px solid;
-            background: rgba(0, 255, 65, 0.05);
+            background: rgba(102, 170, 187, 0.05);
             font-size: 0.9em;
         }
 
         .trade-item.buy {
-            border-color: #00ffff;
+            border-color: #6ab;
         }
 
         .trade-item.sell {
@@ -308,7 +313,7 @@
         }
 
         .trade-item.buy .trade-type {
-            color: #00ffff;
+            color: #6ab;
         }
 
         .trade-item.sell .trade-type {
@@ -330,14 +335,14 @@
         .quick-amount-btn {
             padding: 8px;
             font-size: 0.9em;
-            background: rgba(0, 255, 65, 0.05);
-            border: 1px solid #00ff41;
-            color: #00ff41;
+            background: rgba(102, 170, 187, 0.05);
+            border: 1px solid #6ab;
+            color: #6ab;
             cursor: pointer;
         }
 
         .quick-amount-btn:hover {
-            background: rgba(0, 255, 65, 0.15);
+            background: rgba(102, 170, 187, 0.15);
         }
 
         .loading {
@@ -351,10 +356,10 @@
         }
 
         .position-summary {
-            background: rgba(0, 255, 65, 0.1);
+            background: rgba(102, 170, 187, 0.1);
             padding: 15px;
             margin: 15px 0;
-            border: 2px solid #00ff41;
+            border: 2px solid #6ab;
         }
 
         .position-summary .position-item {
@@ -365,38 +370,130 @@
         }
 
         .position-summary .position-label {
-            color: #00ffff;
+            color: #6ab;
         }
 
         .position-summary .position-value {
-            color: #00ff41;
+            color: #6ab;
             font-weight: bold;
         }
 
         .position-summary .position-value.positive {
-            color: #00ff41;
+            color: #6ab;
         }
 
         .position-summary .position-value.negative {
             color: #ff0040;
+        }
+
+        /* Uniswap-style token cards */
+        .token-input-card {
+            background: rgba(102, 170, 187, 0.05);
+            border: 1px solid #6ab;
+            padding: 16px;
+            margin: 12px 0;
+        }
+
+        .token-input-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .input-label {
+            font-size: 0.85em;
+            color: #8bc;
+        }
+
+        .token-input-body {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .token-amount-input {
+            flex: 1;
+            font-size: 1.8em;
+            font-weight: 500;
+            background: transparent;
+            border: none;
+            color: #6ab;
+            font-family: 'Courier New', monospace;
+            outline: none;
+            padding: 8px 0;
+        }
+
+        .token-amount-input::placeholder {
+            color: rgba(102, 170, 187, 0.3);
+        }
+
+        .token-amount-display {
+            flex: 1;
+            font-size: 1.8em;
+            font-weight: 500;
+            color: #6ab;
+            padding: 8px 0;
+        }
+
+        .token-select {
+            background: rgba(102, 170, 187, 0.1);
+            border: 1px solid #6ab;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .token-symbol {
+            font-size: 1em;
+            font-weight: 600;
+            color: #6ab;
+        }
+
+        .swap-arrow {
+            text-align: center;
+            font-size: 1.5em;
+            color: #6ab;
+            margin: -8px 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .trade-details-inline {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(102, 170, 187, 0.2);
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 0.9em;
+            color: #8bc;
+        }
+
+        .detail-row span:last-child {
+            color: #6ab;
+            font-weight: 500;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>⚡ XNT TRADING TERMINAL ⚡</h1>
+            <h1>XNT TRADING TERMINAL</h1>
             <p>Live Bonding Curve Trading | $1.00 - $2.00 Corridor</p>
         </div>
 
         <div class="grid">
             <!-- Left Column: Wallet & Position -->
             <div class="panel">
-                <h2>💼 WALLET & POSITION</h2>
+                <h2>WALLET & POSITION</h2>
 
                 <div class="wallet-section" id="walletSection">
                     <div id="noWallet">
-                        <p style="margin-bottom: 15px; color: #00ffff;">No wallet found. Create a new wallet to start trading.</p>
+                        <p style="margin-bottom: 15px; color: #8bc;">No wallet found. Create a new wallet to start trading.</p>
                         <button class="btn-primary btn-full" onclick="createWallet()">Create New Wallet</button>
                     </div>
 
@@ -418,47 +515,40 @@
                         </div>
 
                         <div class="balance-grid" style="margin-top: 15px;">
-                            <div class="balance-item" style="background: rgba(0, 255, 255, 0.05);">
+                            <div class="balance-item">
                                 <div class="label">USDC IN POOL (Virtual)</div>
-                                <div class="amount" id="poolUsdcReserve" style="color: #00ffff;">0</div>
+                                <div class="amount" id="poolUsdcReserve">0</div>
                             </div>
-                            <div class="balance-item" style="background: rgba(0, 255, 255, 0.05);">
+                            <div class="balance-item">
                                 <div class="label">XNT IN POOL</div>
-                                <div class="amount" id="poolXntReserve" style="color: #00ffff;">0</div>
+                                <div class="amount" id="poolXntReserve">0</div>
                             </div>
                         </div>
 
                         <div class="balance-grid" style="margin-top: 10px;">
-                            <div class="balance-item" style="background: rgba(0, 255, 65, 0.1); border: 1px solid #00ff41;">
+                            <div class="balance-item">
                                 <div class="label">REAL USDC IN POOL</div>
-                                <div class="amount" id="poolRealUsdcReserve" style="color: #00ff41; font-size: 1.3em;">0</div>
+                                <div class="amount" id="poolRealUsdcReserve" style="font-size: 1.3em;">0</div>
                             </div>
-                            <div class="balance-item" style="background: rgba(0, 255, 65, 0.05);">
+                            <div class="balance-item">
                                 <div class="label">VIRTUAL USDC</div>
                                 <div class="amount" id="poolVirtualUsdc" style="color: #888; font-size: 1.1em;">0</div>
                             </div>
                         </div>
 
-                        <div style="margin-top: 20px; padding: 15px; background: rgba(255, 165, 0, 0.1); border: 1px solid #ff8800; border-radius: 8px;">
-                            <h3 style="margin: 0 0 10px 0; color: #ff8800; font-size: 1.1em;">🛡️ Ceiling Defense Reserve</h3>
-                            <div class="balance-item" style="background: rgba(255, 165, 0, 0.05);">
+                        <div style="margin-top: 20px; padding: 15px; background: rgba(187, 170, 153, 0.05); border: 1px solid #ba9;">
+                            <h3 style="margin: 0 0 10px 0; color: #ba9; font-size: 1.1em;">Ceiling Defense Reserve</h3>
+                            <div class="balance-item" style="background: rgba(187, 170, 153, 0.03);">
                                 <div class="label">CEILING RESERVE XNT</div>
-                                <div class="amount" id="ceilingReserveXnt" style="color: #ff8800; font-size: 1.3em; font-weight: bold;">0</div>
+                                <div class="amount" id="ceilingReserveXnt" style="color: #ba9; font-size: 1.3em; font-weight: bold;">0</div>
                             </div>
-                            <div class="status info" style="margin-top: 10px; font-size: 0.85em; color: #aaa;">
-                                ⚡ Auto-injected when price > $2.00
+                            <div class="status info" style="margin-top: 10px; font-size: 0.85em;">
+                                Auto-injected when price exceeds $2.00
                             </div>
-                        </div>
-
-                        <div class="status info" style="margin: 15px 0;">
-                            💡 For trading and USDC airdrop, use the CLI trader:<br>
-                            <code style="font-size: 0.85em; display: block; margin-top: 5px;">
-                                npx ts-node scripts/interactive-trader.ts --pool=DftpSEe5zukxPJJ2S3rJh635YvizsbRskZYZEV3MvWkT
-                            </code>
                         </div>
 
                         <div class="position-summary">
-                            <h3 style="margin-bottom: 10px; color: #00ffff;">Position Summary</h3>
+                            <h3 style="margin-bottom: 10px; color: #8bc;">Position Summary</h3>
                             <div class="position-item">
                                 <span class="position-label">XNT Value (USDC):</span>
                                 <span class="position-value" id="xntValueUSDC">$0</span>
@@ -484,7 +574,7 @@
 
             <!-- Right Column: Market Data & Trading -->
             <div class="panel">
-                <h2>📊 MARKET & TRADING</h2>
+                <h2>MARKET & TRADING</h2>
 
                 <div class="price-display">
                     <div class="price-label">CURRENT XNT PRICE</div>
@@ -496,9 +586,17 @@
                 </div>
 
                 <div class="trade-form">
-                    <div class="form-group">
-                        <label>TRADE AMOUNT (USDC):</label>
-                        <input type="number" id="tradeAmount" placeholder="Enter USDC amount" min="0" step="1000" value="10000" oninput="updateQuote()">
+                    <!-- Uniswap-style token input card -->
+                    <div class="token-input-card">
+                        <div class="token-input-header">
+                            <span class="input-label">You pay</span>
+                        </div>
+                        <div class="token-input-body">
+                            <input type="number" id="tradeAmount" class="token-amount-input" placeholder="0.0" min="0" step="1000" value="10000" oninput="updateQuote()">
+                            <div class="token-select">
+                                <span class="token-symbol">USDC</span>
+                            </div>
+                        </div>
                         <div class="quick-amounts">
                             <button class="quick-amount-btn" onclick="setAmount(5000)">5K</button>
                             <button class="quick-amount-btn" onclick="setAmount(10000)">10K</button>
@@ -507,49 +605,54 @@
                         </div>
                     </div>
 
-                    <div class="quote-display" id="quoteDisplay" style="display: none;">
-                        <h3 style="margin-bottom: 10px; color: #00ffff;">Quote Preview</h3>
-                        <div class="quote-item">
-                            <span class="quote-label">You Pay:</span>
-                            <span class="quote-value" id="quotePay">-</span>
+                    <!-- Swap arrow -->
+                    <div class="swap-arrow">↓</div>
+
+                    <!-- Token output card -->
+                    <div class="token-input-card" id="quoteDisplay">
+                        <div class="token-input-header">
+                            <span class="input-label">You receive</span>
                         </div>
-                        <div class="quote-item">
-                            <span class="quote-label">You Receive:</span>
-                            <span class="quote-value" id="quoteReceive">-</span>
+                        <div class="token-input-body">
+                            <div class="token-amount-display" id="quoteReceive">0.0</div>
+                            <div class="token-select">
+                                <span class="token-symbol">XNT</span>
+                            </div>
                         </div>
-                        <div class="quote-item">
-                            <span class="quote-label">Effective Price:</span>
-                            <span class="quote-value" id="quotePrice">-</span>
-                        </div>
-                        <div class="quote-item">
-                            <span class="quote-label">Price Impact:</span>
-                            <span class="quote-value" id="quotePriceImpact">-</span>
-                        </div>
-                        <div class="quote-item">
-                            <span class="quote-label">New Pool Price:</span>
-                            <span class="quote-value" id="quoteNewPrice">-</span>
+
+                        <!-- Trade details -->
+                        <div class="trade-details-inline">
+                            <div class="detail-row">
+                                <span>You Pay</span>
+                                <span id="quotePay">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Price</span>
+                                <span id="quotePrice">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Price Impact</span>
+                                <span id="quotePriceImpact">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>New Pool Price</span>
+                                <span id="quoteNewPrice">-</span>
+                            </div>
                         </div>
                     </div>
 
                     <div class="btn-group">
                         <button class="btn-buy" onclick="executeBuy()" id="buyBtn" disabled>
-                            BUY XNT
+                            Swap
                         </button>
-                        <button class="btn-sell" onclick="executeSell()" id="sellBtn" disabled>
-                            SELL XNT
+                        <button class="btn-sell" onclick="executeSell()" id="sellBtn" disabled style="display:none;">
+                            Sell
                         </button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Trade History -->
-        <div class="panel">
-            <h2>📜 TRADE HISTORY</h2>
-            <div class="trade-history" id="tradeHistory">
-                <p style="color: #888; text-align: center; padding: 20px;">No trades yet. Start trading to see your history here.</p>
-            </div>
-        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@latest/lib/index.iife.min.js"></script>

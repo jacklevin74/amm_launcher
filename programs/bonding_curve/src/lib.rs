@@ -486,6 +486,44 @@ pub mod bonding_curve {
         Ok(())
     }
 
+    /// Withdraw XNT from the ceiling reserve (authority only)
+    /// Allows authority to remove XNT from the reserve for rebalancing or emergency purposes
+    pub fn withdraw_from_ceiling_reserve(
+        ctx: Context<WithdrawFromCeilingReserve>,
+        xnt_amount: u64,
+    ) -> Result<()> {
+        let pool = &ctx.accounts.pool;
+
+        require!(
+            ctx.accounts.authority.key() == pool.authority,
+            ErrorCode::Unauthorized
+        );
+
+        msg!("💸 Withdrawing {} XNT from ceiling reserve", xnt_amount);
+
+        // Transfer XNT from ceiling reserve to authority using PDA signer
+        let pool_key = pool.key();
+        let seeds = &[
+            b"ceiling_reserve",
+            pool_key.as_ref(),
+            &[pool.ceiling_reserve_bump],
+        ];
+        let signer = &[&seeds[..]];
+
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.ceiling_reserve_xnt.to_account_info(),
+            to: ctx.accounts.authority_xnt.to_account_info(),
+            authority: ctx.accounts.ceiling_reserve_pda.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+        token::transfer(cpi_ctx, xnt_amount)?;
+
+        msg!("✅ Withdrawal from ceiling reserve successful");
+
+        Ok(())
+    }
+
     /// Withdraw XNT from the pool (authority only)
     /// Decreases XNT supply which INCREASES price
     pub fn withdraw_xnt(ctx: Context<WithdrawXnt>, xnt_amount: u64) -> Result<()> {
@@ -998,6 +1036,39 @@ pub struct FundCeilingReserve<'info> {
         constraint = ceiling_reserve_xnt.key() == pool.ceiling_reserve_xnt
     )]
     pub ceiling_reserve_xnt: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawFromCeilingReserve<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        seeds = [b"pool", pool.xnt_mint.as_ref(), pool.usdc_mint.as_ref()],
+        bump = pool.bump,
+    )]
+    pub pool: Account<'info, Pool>,
+
+    /// Ceiling reserve PDA (authority for ceiling reserve XNT account)
+    #[account(
+        seeds = [b"ceiling_reserve", pool.key().as_ref()],
+        bump = pool.ceiling_reserve_bump,
+    )]
+    /// CHECK: PDA signer for ceiling reserve
+    pub ceiling_reserve_pda: UncheckedAccount<'info>,
+
+    /// Ceiling reserve XNT token account (source)
+    #[account(
+        mut,
+        constraint = ceiling_reserve_xnt.key() == pool.ceiling_reserve_xnt
+    )]
+    pub ceiling_reserve_xnt: Account<'info, TokenAccount>,
+
+    /// Authority's XNT token account (destination)
+    #[account(mut)]
+    pub authority_xnt: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
 }
