@@ -92,14 +92,13 @@ async function main() {
       new anchor.BN(2_000_000),            // price_ceiling ($2.00)
       new anchor.BN(1_000_000)             // price_floor ($1.00)
     )
-    .accounts({
+    .accountsPartial({
       initializer: walletKeypair.publicKey,
       xntMint,
       usdcMint,
       poolXnt: poolXntKeypair.publicKey,
       poolUsdc: poolUsdcKeypair.publicKey,
       initializerXnt: authorityXntAccount.address,
-      ceilingReservePda: ceilingReservePda,
       ceilingReserveXnt: ceilingReserveXntKeypair.publicKey,
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: anchor.web3.SystemProgram.programId,

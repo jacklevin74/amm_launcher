@@ -728,7 +728,7 @@ pub mod bonding_curve {
     /// Wrap native SOL into XNT tokens
     /// User sends SOL, receives XNT at 1:1 ratio (1 SOL = 1 XNT)
     pub fn wrap_sol(ctx: Context<WrapSol>, sol_amount: u64) -> Result<()> {
-        let pool = &ctx.accounts.pool;
+        let pool = &mut ctx.accounts.pool;
 
         msg!("Wrapping {} SOL into XNT", sol_amount as f64 / 1_000_000_000.0);
 
@@ -773,7 +773,13 @@ pub mod bonding_curve {
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
         token::transfer(cpi_ctx, xnt_amount)?;
 
+        // Update pool XNT reserve (decrease because XNT left the pool)
+        pool.xnt_reserve = pool.xnt_reserve
+            .checked_sub(xnt_amount)
+            .ok_or(ErrorCode::MathOverflow)?;
+
         msg!("✅ Wrapped {} SOL into {} XNT", sol_amount as f64 / 1_000_000_000.0, xnt_amount as f64 / 1_000_000.0);
+        msg!("Pool XNT reserve: {}", pool.xnt_reserve);
 
         Ok(())
     }
@@ -781,7 +787,7 @@ pub mod bonding_curve {
     /// Unwrap XNT tokens back to native SOL
     /// User sends XNT, receives SOL at 1:1 ratio (1 XNT = 1 SOL)
     pub fn unwrap_sol(ctx: Context<UnwrapSol>, xnt_amount: u64) -> Result<()> {
-        let pool = &ctx.accounts.pool;
+        let pool = &mut ctx.accounts.pool;
 
         msg!("Unwrapping {} XNT into SOL", xnt_amount as f64 / 1_000_000.0);
 
@@ -794,6 +800,11 @@ pub mod bonding_curve {
         let cpi_program = ctx.accounts.token_program.to_account_info();
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
         token::transfer(cpi_ctx, xnt_amount)?;
+
+        // Update pool XNT reserve (increase because XNT came back to the pool)
+        pool.xnt_reserve = pool.xnt_reserve
+            .checked_add(xnt_amount)
+            .ok_or(ErrorCode::MathOverflow)?;
 
         // Calculate SOL to return (1:1 ratio with XNT)
         // 1 XNT (6 decimals) = 1 SOL (9 decimals)
@@ -828,6 +839,7 @@ pub mod bonding_curve {
         )?;
 
         msg!("✅ Unwrapped {} XNT into {} SOL", xnt_amount as f64 / 1_000_000.0, sol_amount as f64 / 1_000_000_000.0);
+        msg!("Pool XNT reserve: {}", pool.xnt_reserve);
 
         Ok(())
     }
