@@ -628,51 +628,9 @@ async function executeWrap() {
     }
 }
 
-// Execute unwrap (XNT→SOL)
+// Execute unwrap (XNT→SOL) - NOT NEEDED: XNT is native wSOL
 async function executeUnwrap() {
-    if (!wallet) {
-        showStatus('Please wait for wallet to load', 'error');
-        return;
-    }
-
-    const amountInput = document.getElementById('tradeAmount');
-    const xntAmount = parseFloat(amountInput.value);
-
-    if (!xntAmount || xntAmount <= 0) {
-        showStatus('Please enter a valid amount', 'error');
-        return;
-    }
-
-    try {
-        document.getElementById('swapBtn').disabled = true;
-
-        // Simply unwrap XNT to SOL (1:1)
-        showStatus(`Unwrapping ${xntAmount} XNT to SOL...`, 'info');
-        const amountWithDecimals = Math.floor(xntAmount * 1e9); // XNT base units (wSOL = 9 decimals)
-
-        const unwrapResponse = await fetch('/api/unwrap', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                amount: amountWithDecimals,
-                poolAddress: CONFIG.POOL_ADDRESS
-            })
-        });
-
-        const unwrapResult = await unwrapResponse.json();
-
-        if (unwrapResult.success) {
-            showStatus(`✅ Unwrapped ${xntAmount} XNT → ${xntAmount} SOL! TX: ${unwrapResult.tx.substring(0, 20)}...`, 'success');
-            await updatePrice();
-            await updateBalances();
-        } else {
-            throw new Error('Unwrap failed: ' + unwrapResult.error);
-        }
-    } catch (error) {
-        showStatus('❌ Error: ' + error.message, 'error');
-    } finally {
-        document.getElementById('swapBtn').disabled = false;
-    }
+    showStatus('ℹ️ Unwrap not needed - XNT is native wSOL (wrapped SOL). You can unwrap wSOL to SOL using any Solana wallet (Phantom, Solflare, etc.)', 'info');
 }
 
 // Execute: Sell XNT for USDC (internally: wrap SOL → XNT, then sell XNT for USDC)
@@ -728,7 +686,7 @@ async function executeSellSOLForUSDC() {
     }
 }
 
-// Execute: Buy XNT with USDC (internally: buy XNT with USDC, then unwrap XNT → SOL)
+// Execute: Buy XNT (wSOL) with USDC - No unwrap needed, XNT is native wSOL
 async function executeBuySOLWithUSDC() {
     if (!wallet || !poolData) {
         showStatus('Please wait for wallet and price data to load', 'error');
@@ -746,9 +704,9 @@ async function executeBuySOLWithUSDC() {
     try {
         document.getElementById('swapBtn').disabled = true;
 
-        // Step 1: Buy XNT with USDC on AMM
-        showStatus(`Buying SOL with ${usdcAmount} USDC...`, 'info');
-        addLog(`[1/2] Buying XNT with ${usdcAmount} USDC on AMM...`, 'info');
+        // Buy XNT (wSOL) with USDC on AMM
+        showStatus(`Buying wSOL with ${usdcAmount} USDC...`, 'info');
+        addLog(`Buying XNT (wSOL) with ${usdcAmount} USDC on AMM...`, 'info');
         const usdcWithDecimals = Math.floor(usdcAmount * 1e6);
         const buyResponse = await fetch('/api/buy', {
             method: 'POST',
@@ -758,25 +716,14 @@ async function executeBuySOLWithUSDC() {
         const buyResult = await buyResponse.json();
         if (!buyResult.success) throw new Error('Buy failed: ' + buyResult.error);
 
-        // Calculate how much XNT we got (from the quote)
+        // Calculate how much XNT (wSOL) we got (from the quote)
         const k = poolData.xntReserve * poolData.usdcReserve;
         const newUsdcReserve = poolData.usdcReserve + usdcWithDecimals;
         const newXntReserve = k / newUsdcReserve;
         const xntReceived = Math.floor(poolData.xntReserve - newXntReserve);
-        addLog(`✓ Bought ${(xntReceived / 1e9).toFixed(2)} XNT. TX: ${buyResult.tx.substring(0, 20)}...`, 'success');
+        addLog(`✓ Bought ${(xntReceived / 1e9).toFixed(2)} wSOL (XNT). TX: ${buyResult.tx.substring(0, 20)}...`, 'success');
 
-        // Step 2: Unwrap XNT → SOL (automatic - user gets native SOL)
-        addLog(`[2/2] Unwrapping ${(xntReceived / 1e9).toFixed(2)} XNT → SOL (depositing to wallet)...`, 'info');
-        const unwrapResponse = await fetch('/api/unwrap', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: xntReceived, poolAddress: CONFIG.POOL_ADDRESS })
-        });
-        const unwrapResult = await unwrapResponse.json();
-        if (!unwrapResult.success) throw new Error('Unwrap failed: ' + unwrapResult.error);
-        addLog(`✓ Unwrapped ${(xntReceived / 1e9).toFixed(2)} XNT → ${(xntReceived / 1e9).toFixed(2)} SOL. TX: ${unwrapResult.tx.substring(0, 20)}...`, 'success');
-
-        showStatus(`✅ Received ${(xntReceived / 1e9).toFixed(2)} SOL for ${usdcAmount} USDC!`, 'success');
+        showStatus(`✅ Received ${(xntReceived / 1e9).toFixed(2)} wSOL for ${usdcAmount} USDC! (You can unwrap wSOL to SOL in any wallet)`, 'success');
         await updatePrice();
         await updateBalances();
     } catch (error) {
