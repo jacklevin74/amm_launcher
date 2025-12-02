@@ -261,7 +261,7 @@ async function updatePrice() {
         document.getElementById('currentPrice').textContent = '$' + price.toFixed(6);
 
         // Update XNT reserve display
-        document.getElementById('poolXntReserve').textContent = (xntReserve / 1e6).toLocaleString(undefined, { maximumFractionDigits: 3 });
+        document.getElementById('poolXntReserve').textContent = (xntReserve / 1e9).toLocaleString(undefined, { maximumFractionDigits: 3 });
 
         // Fetch real USDC reserves from API (only show real USDC, not virtual)
         try {
@@ -283,7 +283,7 @@ async function updatePrice() {
         // Fetch ceiling reserve XNT balance
         try {
             const ceilingReserveInfo = await connection.getTokenAccountBalance(new PublicKey(CONFIG.CEILING_RESERVE_XNT));
-            const ceilingReserveXnt = parseInt(ceilingReserveInfo.value.amount) / 1e6;
+            const ceilingReserveXnt = parseInt(ceilingReserveInfo.value.amount) / 1e9;
             document.getElementById('ceilingReserveXnt').textContent = ceilingReserveXnt.toLocaleString(undefined, { maximumFractionDigits: 3 });
         } catch (e) {
             console.error('Error fetching ceiling reserve:', e);
@@ -381,13 +381,13 @@ async function updateBalances() {
         }
 
         // Update UI
-        document.getElementById('xntBalance').textContent = (xntBalance / 1e6).toLocaleString();
+        document.getElementById('xntBalance').textContent = (xntBalance / 1e9).toLocaleString();
         document.getElementById('usdcBalance').textContent = (usdcBalance / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
         document.getElementById('solBalance').textContent = (solBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         // Update position summary (only if poolData is available)
         if (poolData && poolData.price) {
-            const xntValueUSDC = (xntBalance / 1e6) * poolData.price;
+            const xntValueUSDC = (xntBalance / 1e9) * poolData.price;
             const solValueUSDC = (solBalance / 1e9) * poolData.price; // 1 SOL = 1 XNT = poolData.price USDC
             const usdcValue = usdcBalance / 1e6; // USDC is already in USDC
             const totalPortfolio = xntValueUSDC + solValueUSDC + usdcValue;
@@ -401,8 +401,8 @@ async function updateBalances() {
                 document.getElementById('avgEntryPrice').textContent = '$' + avgEntry.toFixed(6);
 
                 // Calculate P&L
-                const currentValue = (xntBalance / 1e6) * poolData.price;
-                const costBasis = (xntBalance / 1e6) * avgEntry;
+                const currentValue = (xntBalance / 1e9) * poolData.price;
+                const costBasis = (xntBalance / 1e9) * avgEntry;
                 const pnl = currentValue - costBasis;
                 const pnlPercent = costBasis > 0 ? (pnl / costBasis * 100) : 0;
 
@@ -436,7 +436,7 @@ function updateQuote() {
                 return;
             }
             // Sell XNT for USDC on AMM
-            const xntAmount = amount * 1e6;
+            const xntAmount = amount * 1e9;
             const k = poolData.xntReserve * poolData.usdcReserve;
             const newXntReserve = poolData.xntReserve + xntAmount;
             const newUsdcReserve = k / newXntReserve;
@@ -466,7 +466,7 @@ function updateQuote() {
             const newPrice2 = newUsdcReserve2 / newXntReserve2;
             const priceImpact2 = ((newPrice2 / poolData.price) - 1) * 100;
 
-            document.getElementById('quoteReceive').textContent = (xntOut / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('quoteReceive').textContent = (xntOut / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('quotePrice').textContent = '$' + effectivePrice2.toFixed(6);
             document.getElementById('quotePriceImpact').textContent = (priceImpact2 >= 0 ? '+' : '') + priceImpact2.toFixed(2) + '%';
             document.getElementById('quoteNewPrice').textContent = '$' + newPrice2.toFixed(6);
@@ -539,7 +539,7 @@ async function executeSell() {
     }
 
     // Amount is directly in XNT (user input)
-    const amountWithDecimals = Math.floor(amount * 1e6);
+    const amountWithDecimals = Math.floor(amount * 1e9);
 
     try {
         document.getElementById('swapBtn').disabled = true;
@@ -646,7 +646,7 @@ async function executeUnwrap() {
 
         // Simply unwrap XNT to SOL (1:1)
         showStatus(`Unwrapping ${xntAmount} XNT to SOL...`, 'info');
-        const amountWithDecimals = Math.floor(xntAmount * 1e6); // XNT base units
+        const amountWithDecimals = Math.floor(xntAmount * 1e9); // XNT base units (wSOL = 9 decimals)
 
         const unwrapResponse = await fetch('/api/unwrap', {
             method: 'POST',
@@ -706,7 +706,7 @@ async function executeSellSOLForUSDC() {
 
         // Step 2: Sell XNT for USDC on AMM
         addLog(`[2/2] Selling ${solAmount} XNT for USDC on AMM...`, 'info');
-        const xntWithDecimals = Math.floor(solAmount * 1e6);
+        const xntWithDecimals = Math.floor(solAmount * 1e9);
         const sellResponse = await fetch('/api/sell', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -761,10 +761,10 @@ async function executeBuySOLWithUSDC() {
         const newUsdcReserve = poolData.usdcReserve + usdcWithDecimals;
         const newXntReserve = k / newUsdcReserve;
         const xntReceived = Math.floor(poolData.xntReserve - newXntReserve);
-        addLog(`✓ Bought ${(xntReceived / 1e6).toFixed(2)} XNT. TX: ${buyResult.tx.substring(0, 20)}...`, 'success');
+        addLog(`✓ Bought ${(xntReceived / 1e9).toFixed(2)} XNT. TX: ${buyResult.tx.substring(0, 20)}...`, 'success');
 
         // Step 2: Unwrap XNT → SOL (automatic - user gets native SOL)
-        addLog(`[2/2] Unwrapping ${(xntReceived / 1e6).toFixed(2)} XNT → SOL (depositing to wallet)...`, 'info');
+        addLog(`[2/2] Unwrapping ${(xntReceived / 1e9).toFixed(2)} XNT → SOL (depositing to wallet)...`, 'info');
         const unwrapResponse = await fetch('/api/unwrap', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -772,9 +772,9 @@ async function executeBuySOLWithUSDC() {
         });
         const unwrapResult = await unwrapResponse.json();
         if (!unwrapResult.success) throw new Error('Unwrap failed: ' + unwrapResult.error);
-        addLog(`✓ Unwrapped ${(xntReceived / 1e6).toFixed(2)} XNT → ${(xntReceived / 1e6).toFixed(2)} SOL. TX: ${unwrapResult.tx.substring(0, 20)}...`, 'success');
+        addLog(`✓ Unwrapped ${(xntReceived / 1e9).toFixed(2)} XNT → ${(xntReceived / 1e9).toFixed(2)} SOL. TX: ${unwrapResult.tx.substring(0, 20)}...`, 'success');
 
-        showStatus(`✅ Received ${(xntReceived / 1e6).toFixed(2)} SOL for ${usdcAmount} USDC!`, 'success');
+        showStatus(`✅ Received ${(xntReceived / 1e9).toFixed(2)} SOL for ${usdcAmount} USDC!`, 'success');
         await updatePrice();
         await updateBalances();
     } catch (error) {
