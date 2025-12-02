@@ -54,7 +54,9 @@ pub mod bonding_curve {
 
         msg!("Pool initialized with {} XNT (single-sided)", xnt_amount);
         msg!("Virtual USDC reserve: {} (for price calculation)", virtual_usdc_amount);
-        msg!("Starting price: ${}", virtual_usdc_amount / xnt_amount);
+        if xnt_amount > 0 {
+            msg!("Starting price: ${}", virtual_usdc_amount / xnt_amount);
+        }
         msg!("Price ceiling: ${}", price_ceiling as f64 / 1_000_000.0);
         msg!("Constant k: {}", pool.k);
 
