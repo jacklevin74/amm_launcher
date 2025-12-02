@@ -1,7 +1,7 @@
 import * as anchor from '@coral-xyz/anchor';
 import { AnchorProvider, Program, Wallet } from '@coral-xyz/anchor';
-import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, getOrCreateAssociatedTokenAccount } from '@solana/spl-token';
+import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction, SystemProgram } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, NATIVE_MINT, getOrCreateAssociatedTokenAccount, createSyncNativeInstruction } from '@solana/spl-token';
 import fs from 'fs';
 
 async function main() {
@@ -41,14 +41,14 @@ async function main() {
   const traderXnt = await getOrCreateAssociatedTokenAccount(connection, mainWallet, xntMint, trader.publicKey);
   const traderUsdc = await getOrCreateAssociatedTokenAccount(connection, mainWallet, usdcMint, trader.publicKey);
 
-  // Build instruction data: discriminator (8 bytes) + amount (8 bytes)
+  // Build sell instruction data: discriminator (8 bytes) + amount (8 bytes)
   const discriminator = Buffer.from([51, 230, 133, 164, 1, 127, 131, 173]); // sell instruction discriminator
   const amountBuffer = Buffer.alloc(8);
   amountBuffer.writeBigUInt64LE(BigInt(amount.toString()), 0);
   const data = Buffer.concat([discriminator, amountBuffer]);
 
-  // Build instruction
-  const instruction = new TransactionInstruction({
+  // Build sell instruction
+  const sellInstruction = new TransactionInstruction({
     programId,
     keys: [
       { pubkey: trader.publicKey, isSigner: true, isWritable: true },
@@ -63,8 +63,29 @@ async function main() {
     data,
   });
 
-  // Send transaction
-  const tx = new Transaction().add(instruction);
+  // Create transaction with wrap SOL + sell
+  const tx = new Transaction();
+
+  // Step 1: Transfer SOL to wSOL account (wrapping)
+  tx.add(
+    SystemProgram.transfer({
+      fromPubkey: trader.publicKey,
+      toPubkey: traderXnt.address,
+      lamports: BigInt(amount.toString()),
+    })
+  );
+
+  // Step 2: Sync native (complete the wrap)
+  tx.add(
+    createSyncNativeInstruction(
+      traderXnt.address,
+      TOKEN_PROGRAM_ID
+    )
+  );
+
+  // Step 3: Sell wSOL for USDC
+  tx.add(sellInstruction);
+
   const signature = await connection.sendTransaction(tx, [trader], { skipPreflight: false });
   await connection.confirmTransaction(signature, 'confirmed');
 

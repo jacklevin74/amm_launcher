@@ -185,7 +185,7 @@ const fs = require('fs');
   const pool = await program.account.pool.fetch(poolAddress);
 
   const reserveInfo = await connection.getTokenAccountBalance(pool.ceilingReserveXnt);
-  const currentPrice = pool.usdcReserve.toNumber() / pool.xntReserve.toNumber();
+  const currentPrice = Number(pool.usdcReserve.toString()) / Number(pool.xntReserve.toString());
 
   console.log(JSON.stringify({
     reserveBalance: reserveInfo.value.amount,

@@ -11,7 +11,7 @@ const CONFIG = {
     TOKEN_PROGRAM_ID: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
     ASSOCIATED_TOKEN_PROGRAM_ID: 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
     XNT_MINT: 'So11111111111111111111111111111111111111112', // Native SOL mint (wSOL)
-    CEILING_RESERVE_XNT: 'GYd44Nu2cyg72W3hwSW5N9xPZwroNP4MCT8DqjmhnMgr', // Ceiling reserve wSOL account
+    CEILING_RESERVE_XNT: 'AbsTEbV4LP5YmKnwQwWceEMp8CQz5Cbdy4bgU2zAZviT', // Ceiling reserve wSOL account (fetched from pool struct)
     AIRDROP_AMOUNT: 100_000 * 1e9, // 100K USDC (9 decimals)
     POLL_INTERVAL: 2000, // Update UI every 2 seconds
 };
@@ -282,11 +282,13 @@ async function updatePrice() {
             document.getElementById('poolRealUsdcReserve').textContent = '0';
         }
 
-        // Fetch ceiling reserve XNT balance
+        // Fetch ceiling reserve XNT balance from pool struct (not hardcoded)
         try {
-            const ceilingReserveInfo = await connection.getTokenAccountBalance(new PublicKey(CONFIG.CEILING_RESERVE_XNT));
-            const ceilingReserveXnt = parseInt(ceilingReserveInfo.value.amount) / 1e9;
-            document.getElementById('ceilingReserveXnt').textContent = ceilingReserveXnt.toLocaleString(undefined, { maximumFractionDigits: 3 });
+            // Get ceiling reserve address from pool data
+            const ceilingReserveXnt = new PublicKey(data.slice(219, 251)); // ceiling_reserve_xnt at offset 219
+            const ceilingReserveInfo = await connection.getTokenAccountBalance(ceilingReserveXnt);
+            const ceilingReserveBalance = parseInt(ceilingReserveInfo.value.amount) / 1e9;
+            document.getElementById('ceilingReserveXnt').textContent = ceilingReserveBalance.toLocaleString(undefined, { maximumFractionDigits: 3 });
         } catch (e) {
             console.error('Error fetching ceiling reserve:', e);
         }

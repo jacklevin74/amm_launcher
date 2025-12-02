@@ -1,7 +1,7 @@
 import * as anchor from '@coral-xyz/anchor';
 import { AnchorProvider, Program, Wallet } from '@coral-xyz/anchor';
-import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, getOrCreateAssociatedTokenAccount } from '@solana/spl-token';
+import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, NATIVE_MINT, getOrCreateAssociatedTokenAccount, createSyncNativeInstruction, createCloseAccountInstruction } from '@solana/spl-token';
 import fs from 'fs';
 
 async function main() {
@@ -47,14 +47,14 @@ async function main() {
     programId
   );
 
-  // Build instruction data: discriminator (8 bytes) + amount (8 bytes)
+  // Build buy instruction data: discriminator (8 bytes) + amount (8 bytes)
   const discriminator = Buffer.from([102, 6, 61, 18, 1, 218, 235, 234]); // buy instruction discriminator
   const amountBuffer = Buffer.alloc(8);
   amountBuffer.writeBigUInt64LE(BigInt(amount.toString()), 0);
   const data = Buffer.concat([discriminator, amountBuffer]);
 
-  // Build instruction
-  const instruction = new TransactionInstruction({
+  // Build buy instruction
+  const buyInstruction = new TransactionInstruction({
     programId,
     keys: [
       { pubkey: trader.publicKey, isSigner: true, isWritable: true },
@@ -70,8 +70,27 @@ async function main() {
     data,
   });
 
-  // Send transaction
-  const tx = new Transaction().add(instruction);
+  // Calculate expected XNT output to know how much wSOL we'll receive
+  const k = pool.xntReserve.mul(pool.usdcReserve);
+  const newUsdcReserve = pool.usdcReserve.add(amount);
+  const newXntReserve = k.div(newUsdcReserve);
+  const xntOut = pool.xntReserve.sub(newXntReserve);
+
+  // Create transaction with buy + unwrap wSOL to SOL
+  const tx = new Transaction();
+  tx.add(buyInstruction);
+
+  // Add unwrap instruction: close wSOL account to get SOL back
+  tx.add(
+    createCloseAccountInstruction(
+      traderXnt.address,      // wSOL account to close
+      trader.publicKey,       // destination for lamports (trader's SOL wallet)
+      trader.publicKey,       // owner of the wSOL account
+      [],                     // no multisig
+      TOKEN_PROGRAM_ID
+    )
+  );
+
   const signature = await connection.sendTransaction(tx, [trader], { skipPreflight: false });
   await connection.confirmTransaction(signature, 'confirmed');
 
