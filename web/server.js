@@ -185,12 +185,15 @@ const fs = require('fs');
   const pool = await program.account.pool.fetch(poolAddress);
 
   const reserveInfo = await connection.getTokenAccountBalance(pool.ceilingReserveXnt);
+  const realUsdcInfo = await connection.getTokenAccountBalance(pool.poolUsdc);
   const currentPrice = Number(pool.usdcReserve.toString()) / Number(pool.xntReserve.toString());
 
   console.log(JSON.stringify({
     reserveBalance: reserveInfo.value.amount,
     poolXntReserve: pool.xntReserve.toString(),
-    currentPrice: currentPrice
+    currentPrice: currentPrice,
+    realUsdc: realUsdcInfo.value.amount,
+    virtualUsdc: pool.usdcReserve.toString()
   }));
 })().catch(e => console.log(JSON.stringify({ error: e.message })));
 "`;

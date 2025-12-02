@@ -1,7 +1,7 @@
 // Admin Panel Configuration
 const CONFIG = {
     RPC_URL: 'http://localhost:8899',
-    POOL_ADDRESS: 'Erv5YtP4vtBdJxG7Dh44vpjm5w5yJUmmyESpqzQwvFfc',
+    POOL_ADDRESS: 'FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng',
     API_BASE_URL: 'http://localhost:3030/api',
     POLL_INTERVAL: 3000, // Update UI every 3 seconds
 };
@@ -103,6 +103,18 @@ async function updateStats() {
         document.getElementById('reserveBalance').textContent = formatNumber(stats.reserveBalance) + ' XNT';
         document.getElementById('poolXntReserve').textContent = formatNumber(stats.poolXntReserve) + ' XNT';
         document.getElementById('currentPrice').textContent = '$' + stats.currentPrice.toFixed(6);
+
+        // Update USDC stats
+        if (stats.realUsdc !== undefined) {
+            document.getElementById('realUsdc').textContent = formatUsdcNumber(stats.realUsdc) + ' USDC';
+        }
+        if (stats.virtualUsdc !== undefined) {
+            document.getElementById('virtualUsdc').textContent = formatUsdcNumber(stats.virtualUsdc) + ' USDC';
+        }
+        if (stats.realUsdc !== undefined && stats.virtualUsdc !== undefined) {
+            const gap = stats.virtualUsdc - stats.realUsdc;
+            document.getElementById('usdcGap').textContent = formatUsdcNumber(gap) + ' USDC';
+        }
     } catch (error) {
         console.error('Failed to update stats:', error);
     }
@@ -206,5 +218,48 @@ function clearStatus() {
 }
 
 function formatNumber(num) {
-    return (num / 1e6).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    return (num / 1e9).toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+function formatUsdcNumber(num) {
+    return (num / 1e9).toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+async function withdrawUsdc() {
+    const amount = parseFloat(document.getElementById('withdrawUsdcAmount').value);
+
+    if (!amount || amount <= 0) {
+        showError('Please enter a valid amount');
+        return;
+    }
+
+    const withdrawBtn = document.getElementById('withdrawUsdcBtn');
+    withdrawBtn.disabled = true;
+    withdrawBtn.innerHTML = '<span class="loading">Processing...</span>';
+
+    clearStatus();
+
+    try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/withdraw-usdc`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: amount * 1e9 }) // Convert to lamports (9 decimals)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showSuccess(`✅ Successfully withdrew ${formatUsdcNumber(amount * 1e9)} USDC!<br>Virtual reserve increased to maintain pricing.<br>TX: <span class="tx-link">${result.tx.substring(0, 20)}...</span>`);
+            document.getElementById('withdrawUsdcAmount').value = '';
+            await updateStats();
+        } else {
+            showError('❌ USDC withdrawal failed: ' + result.error);
+        }
+    } catch (error) {
+        console.error('USDC withdrawal error:', error);
+        showError('❌ USDC withdrawal failed: ' + error.message);
+    } finally {
+        withdrawBtn.disabled = false;
+        withdrawBtn.innerHTML = '&gt; WITHDRAW USDC';
+    }
 }

@@ -45,9 +45,9 @@ async function main() {
   console.error(`   Price: $${priceBefore.toFixed(6)}`);
   console.error(`💰 Withdrawing ${Number(amount.toString()) / 1e9} USDC...`);
 
-  // Call withdraw_usdc instruction
+  // Call withdraw_usdc_price_neutral instruction
   const tx = await program.methods
-    .withdrawUsdc(amount)
+    .withdrawUsdcPriceNeutral(amount)
     .accountsPartial({
       authority: mainWallet.publicKey,
       pool: poolAddress,

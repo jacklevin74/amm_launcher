@@ -660,7 +660,7 @@ pub mod bonding_curve {
 
     /// Withdraw USDC profits from pool (authority only)
     /// Withdraws REAL USDC without changing virtual reserves or pricing
-    pub fn withdraw_usdc(ctx: Context<WithdrawUsdc>, usdc_amount: u64) -> Result<()> {
+    pub fn withdraw_usdc_price_neutral(ctx: Context<WithdrawUsdc>, usdc_amount: u64) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
 
         require!(
