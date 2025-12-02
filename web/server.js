@@ -44,7 +44,7 @@ const fs = require('fs');
 
 (async () => {
   const connection = new anchor.web3.Connection('http://localhost:8899', 'confirmed');
-  const poolAddress = new anchor.web3.PublicKey('D8S95JozUw7vYvYgvuEuP4svGYZmtMBhUXVAQftszGzn');
+  const poolAddress = new anchor.web3.PublicKey('GHeiD2nsYyLUqR5YJ9A7axusWbkDaHA7A6NAyYjEiS31');
 
   // Read pool data directly without using anchor decode
   const poolAccountInfo = await connection.getAccountInfo(poolAddress);
@@ -85,7 +85,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'D8S95JozUw7vYvYgvuEuP4svGYZmtMBhUXVAQftszGzn';
+        const poolAddress = 'GHeiD2nsYyLUqR5YJ9A7axusWbkDaHA7A6NAyYjEiS31';
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/web-buy.ts ${amount} ${poolAddress}`;
 
@@ -141,7 +141,7 @@ const fs = require('fs');
   anchor.setProvider(provider);
   const program = anchor.workspace.BondingCurve;
 
-  const poolAddress = new anchor.web3.PublicKey('D8S95JozUw7vYvYgvuEuP4svGYZmtMBhUXVAQftszGzn');
+  const poolAddress = new anchor.web3.PublicKey('GHeiD2nsYyLUqR5YJ9A7axusWbkDaHA7A6NAyYjEiS31');
   const pool = await program.account.pool.fetch(poolAddress);
 
   console.log(JSON.stringify({
@@ -181,7 +181,7 @@ const fs = require('fs');
   anchor.setProvider(provider);
   const program = anchor.workspace.BondingCurve;
 
-  const poolAddress = new anchor.web3.PublicKey('D8S95JozUw7vYvYgvuEuP4svGYZmtMBhUXVAQftszGzn');
+  const poolAddress = new anchor.web3.PublicKey('GHeiD2nsYyLUqR5YJ9A7axusWbkDaHA7A6NAyYjEiS31');
   const pool = await program.account.pool.fetch(poolAddress);
 
   const reserveInfo = await connection.getTokenAccountBalance(pool.ceilingReserveXnt);
@@ -216,7 +216,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'D8S95JozUw7vYvYgvuEuP4svGYZmtMBhUXVAQftszGzn';
+        const poolAddress = 'GHeiD2nsYyLUqR5YJ9A7axusWbkDaHA7A6NAyYjEiS31';
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
 const anchor = require('@coral-xyz/anchor');
@@ -286,7 +286,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'D8S95JozUw7vYvYgvuEuP4svGYZmtMBhUXVAQftszGzn';
+        const poolAddress = 'GHeiD2nsYyLUqR5YJ9A7axusWbkDaHA7A6NAyYjEiS31';
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
 const anchor = require('@coral-xyz/anchor');
@@ -362,7 +362,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'D8S95JozUw7vYvYgvuEuP4svGYZmtMBhUXVAQftszGzn';
+        const poolAddress = 'GHeiD2nsYyLUqR5YJ9A7axusWbkDaHA7A6NAyYjEiS31';
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/web-sell.ts ${amount} ${poolAddress}`;
 
@@ -425,7 +425,7 @@ const fs = require('fs');
   anchor.setProvider(provider);
   const program = anchor.workspace.BondingCurve;
 
-  const poolAddress = new anchor.web3.PublicKey('D8S95JozUw7vYvYgvuEuP4svGYZmtMBhUXVAQftszGzn');
+  const poolAddress = new anchor.web3.PublicKey('GHeiD2nsYyLUqR5YJ9A7axusWbkDaHA7A6NAyYjEiS31');
   const pool = await program.account.pool.fetch(poolAddress);
   const xntMint = pool.xntMint;
 
@@ -630,7 +630,7 @@ staticServer.listen(PORT, () => {
   console.log('  3. Open http://localhost:' + PORT + '/trading in your browser');
   console.log('  4. Create a wallet and start trading!');
   console.log('');
-  console.log('💡 Current Pool Address: D8S95JozUw7vYvYgvuEuP4svGYZmtMBhUXVAQftszGzn');
+  console.log('💡 Current Pool Address: GHeiD2nsYyLUqR5YJ9A7axusWbkDaHA7A6NAyYjEiS31');
   console.log('');
   console.log('Press Ctrl+C to stop the server\n');
 });

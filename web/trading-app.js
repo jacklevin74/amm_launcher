@@ -6,12 +6,12 @@ const { Connection, Keypair, PublicKey, Transaction, SystemProgram, LAMPORTS_PER
 // Configuration
 const CONFIG = {
     RPC_URL: 'http://localhost:8899',
-    POOL_ADDRESS: 'D8S95JozUw7vYvYgvuEuP4svGYZmtMBhUXVAQftszGzn', // Pool with 10M wSOL (XNT) and 10M virtual USDC
+    POOL_ADDRESS: 'GHeiD2nsYyLUqR5YJ9A7axusWbkDaHA7A6NAyYjEiS31', // Pool with 10M wSOL (XNT) and 10M virtual USDC
     PROGRAM_ID: '2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF',
     TOKEN_PROGRAM_ID: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
     ASSOCIATED_TOKEN_PROGRAM_ID: 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
     XNT_MINT: 'So11111111111111111111111111111111111111112', // Native SOL mint (wSOL)
-    CEILING_RESERVE_XNT: 'EfrPNpQt2EBxY96a7Hhzn233Jz1pBF9KNgd3yXEq6hxp', // Ceiling reserve wSOL account
+    CEILING_RESERVE_XNT: '8mU9JpQVnmAYwrUQNWQeFFssL8USUtHDh5YgrH5WWJ7m', // Ceiling reserve wSOL account
     AIRDROP_AMOUNT: 100_000 * 1e6, // 100K USDC (6 decimals)
     POLL_INTERVAL: 2000, // Update UI every 2 seconds
 };
@@ -255,8 +255,8 @@ async function updatePrice() {
         const xntReserve = readU64(data, 168);
         const usdcReserve = readU64(data, 176);
 
-        // Calculate price with proper decimal adjustment: USDC (6 decimals) / XNT (9 decimals)
-        // price = (usdc / 1e6) / (xnt / 1e9) = (usdc * 1e9) / (xnt * 1e6) = (usdc / xnt) * 1e3
+        // Calculate price: 1 wSOL = 1 USDC
+        // Reserves in atomic units: USDC(6 decimals) / wSOL(9 decimals) * 1000 to adjust
         const price = (usdcReserve / xntReserve) * 1000;
 
         // Update UI
@@ -443,8 +443,8 @@ function updateQuote() {
             const newXntReserve = poolData.xntReserve + xntAmount;
             const newUsdcReserve = k / newXntReserve;
             const usdcOut = poolData.usdcReserve - newUsdcReserve;
-            const effectivePrice = (usdcOut / xntAmount) * 1000; // Adjust for decimal difference
-            const newPrice = (newUsdcReserve / newXntReserve) * 1000; // Adjust for decimal difference
+            const effectivePrice = (usdcOut / xntAmount) * 1000;
+            const newPrice = (newUsdcReserve / newXntReserve) * 1000;
             const priceImpact = ((newPrice / poolData.price) - 1) * 100;
 
             document.getElementById('quoteReceive').textContent = (usdcOut / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -464,8 +464,8 @@ function updateQuote() {
             const newUsdcReserve2 = poolData.usdcReserve + usdcAmount;
             const newXntReserve2 = k2 / newUsdcReserve2;
             const xntOut = poolData.xntReserve - newXntReserve2;
-            const effectivePrice2 = (usdcAmount / xntOut) * 1000; // Adjust for decimal difference
-            const newPrice2 = (newUsdcReserve2 / newXntReserve2) * 1000; // Adjust for decimal difference
+            const effectivePrice2 = (usdcAmount / xntOut) * 1000;
+            const newPrice2 = (newUsdcReserve2 / newXntReserve2) * 1000;
             const priceImpact2 = ((newPrice2 / poolData.price) - 1) * 100;
 
             document.getElementById('quoteReceive').textContent = (xntOut / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -581,51 +581,9 @@ async function executeSwap() {
     }
 }
 
-// Execute wrap (SOL→XNT)
+// Execute wrap (SOL→XNT) - NOT NEEDED: XNT is native wSOL
 async function executeWrap() {
-    if (!wallet) {
-        showStatus('Please wait for wallet to load', 'error');
-        return;
-    }
-
-    const amountInput = document.getElementById('tradeAmount');
-    const solAmount = parseFloat(amountInput.value);
-
-    if (!solAmount || solAmount <= 0) {
-        showStatus('Please enter a valid amount', 'error');
-        return;
-    }
-
-    try {
-        document.getElementById('swapBtn').disabled = true;
-
-        // Simply wrap SOL to XNT (1:1)
-        showStatus(`Wrapping ${solAmount} SOL to XNT...`, 'info');
-        const lamports = Math.floor(solAmount * 1e9);
-
-        const wrapResponse = await fetch('/api/wrap', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                amount: lamports,
-                poolAddress: CONFIG.POOL_ADDRESS
-            })
-        });
-
-        const wrapResult = await wrapResponse.json();
-
-        if (wrapResult.success) {
-            showStatus(`✅ Wrapped ${solAmount} SOL → ${solAmount} XNT! TX: ${wrapResult.tx.substring(0, 20)}...`, 'success');
-            await updatePrice();
-            await updateBalances();
-        } else {
-            throw new Error('Wrap failed: ' + wrapResult.error);
-        }
-    } catch (error) {
-        showStatus('❌ Error: ' + error.message, 'error');
-    } finally {
-        document.getElementById('swapBtn').disabled = false;
-    }
+    showStatus('ℹ️ Wrap not needed - XNT is native wSOL (wrapped SOL). You can wrap SOL to wSOL using any Solana wallet (Phantom, Solflare, etc.)', 'info');
 }
 
 // Execute unwrap (XNT→SOL) - NOT NEEDED: XNT is native wSOL
@@ -633,7 +591,7 @@ async function executeUnwrap() {
     showStatus('ℹ️ Unwrap not needed - XNT is native wSOL (wrapped SOL). You can unwrap wSOL to SOL using any Solana wallet (Phantom, Solflare, etc.)', 'info');
 }
 
-// Execute: Sell XNT for USDC (internally: wrap SOL → XNT, then sell XNT for USDC)
+// Execute: Sell XNT (wSOL) for USDC
 async function executeSellSOLForUSDC() {
     if (!wallet || !poolData) {
         showStatus('Please wait for wallet and price data to load', 'error');
@@ -651,21 +609,8 @@ async function executeSellSOLForUSDC() {
     try {
         document.getElementById('swapBtn').disabled = true;
 
-        // Step 1: Wrap SOL → XNT (automatic - convert user's SOL to XNT)
-        showStatus(`Selling ${solAmount} SOL for USDC...`, 'info');
-        addLog(`[1/2] Wrapping ${solAmount} SOL → XNT...`, 'info');
-        const lamports = Math.floor(solAmount * 1e9);
-        const wrapResponse = await fetch('/api/wrap', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: lamports, poolAddress: CONFIG.POOL_ADDRESS })
-        });
-        const wrapResult = await wrapResponse.json();
-        if (!wrapResult.success) throw new Error('Wrap failed: ' + wrapResult.error);
-        addLog(`✓ Wrapped ${solAmount} SOL → ${solAmount} XNT. TX: ${wrapResult.tx.substring(0, 20)}...`, 'success');
-
-        // Step 2: Sell XNT for USDC on AMM
-        addLog(`[2/2] Selling ${solAmount} XNT for USDC on AMM...`, 'info');
+        // Sell wSOL (XNT) for USDC on AMM
+        showStatus(`Selling ${solAmount} wSOL for USDC...`, 'info');
         const xntWithDecimals = Math.floor(solAmount * 1e9);
         const sellResponse = await fetch('/api/sell', {
             method: 'POST',
@@ -675,8 +620,7 @@ async function executeSellSOLForUSDC() {
         const sellResult = await sellResponse.json();
         if (!sellResult.success) throw new Error('Sell failed: ' + sellResult.error);
 
-        addLog(`✓ Sold XNT for USDC. TX: ${sellResult.tx.substring(0, 20)}...`, 'success');
-        showStatus(`✅ Received USDC for ${solAmount} SOL!`, 'success');
+        showStatus(`✅ Sold ${solAmount} wSOL for USDC! TX: ${sellResult.tx.substring(0, 20)}...`, 'success');
         await updatePrice();
         await updateBalances();
     } catch (error) {

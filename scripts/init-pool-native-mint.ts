@@ -15,7 +15,7 @@ import * as fs from "fs";
 
 const VIRTUAL_USDC = 10_000_000_000_000;     // 10M virtual USDC (6 decimals)
 const TRADER_USDC = 10_000_000_000_000;      // 10M USDC for trader (6 decimals)
-const INITIAL_XNT_STR = "10000000000000000"; // 10M XNT/wSOL (9 decimals - as string for BN)
+const INITIAL_XNT_STR = "10000000000000000"; // 10M XNT/wSOL (9 decimals) for 1:1 ratio with 10M USDC
 const INITIAL_XNT = 10_000_000 * LAMPORTS_PER_SOL;  // 10M SOL in lamports
 
 async function main() {
@@ -179,7 +179,7 @@ async function main() {
 
   // Verify pool state
   const pool = await program.account.pool.fetch(poolPda);
-  const priceNum = Number(pool.usdcReserve.toString()) / Number(pool.xntReserve.toString());
+  const priceNum = (Number(pool.usdcReserve.toString()) / Number(pool.xntReserve.toString())) * 1000;
 
   console.log("\n" + "=".repeat(60));
   console.log("🎉 INITIALIZATION COMPLETE!");
