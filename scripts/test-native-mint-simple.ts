@@ -59,9 +59,10 @@ async function main() {
   const poolUsdc = poolData.poolUsdc;
 
   console.log("📋 INITIAL POOL STATE:");
-  console.log(`  wSOL Reserve: ${(poolBefore.xntReserve.toNumber() / 1e9).toLocaleString()} wSOL`);
-  console.log(`  USDC Reserve: ${(poolBefore.usdcReserve.toNumber() / 1e6).toLocaleString()} USDC`);
-  console.log(`  Price: $${(poolBefore.usdcReserve.toNumber() / poolBefore.xntReserve.toNumber()).toFixed(6)}\n`);
+  console.log(`  wSOL Reserve: ${(Number(poolBefore.xntReserve.toString()) / 1e9).toLocaleString()} wSOL`);
+  console.log(`  USDC Reserve: ${(Number(poolBefore.usdcReserve.toString()) / 1e6).toLocaleString()} USDC`);
+  const priceBefore = Number(poolBefore.usdcReserve.toString()) / Number(poolBefore.xntReserve.toString());
+  console.log(`  Price: $${priceBefore.toFixed(6)}\n`);
 
   // Get trader balances
   const traderSolBefore = await connection.getBalance(traderKeypair.publicKey);
@@ -134,9 +135,10 @@ async function main() {
     console.log(`  USDC: ${(Number(traderUsdcAfter.amount) / 1e6).toLocaleString()} (-${((Number(traderUsdcBefore.amount) - Number(traderUsdcAfter.amount)) / 1e6).toLocaleString()})\n`);
 
     console.log("📊 POOL AFTER:");
-    console.log(`  wSOL Reserve: ${(poolAfter.xntReserve.toNumber() / 1e9).toLocaleString()} wSOL`);
-    console.log(`  USDC Reserve: ${(poolAfter.usdcReserve.toNumber() / 1e6).toLocaleString()} USDC`);
-    console.log(`  Price: $${(poolAfter.usdcReserve.toNumber() / poolAfter.xntReserve.toNumber()).toFixed(6)}\n`);
+    console.log(`  wSOL Reserve: ${(Number(poolAfter.xntReserve.toString()) / 1e9).toLocaleString()} wSOL`);
+    console.log(`  USDC Reserve: ${(Number(poolAfter.usdcReserve.toString()) / 1e6).toLocaleString()} USDC`);
+    const priceAfter = Number(poolAfter.usdcReserve.toString()) / Number(poolAfter.xntReserve.toString());
+    console.log(`  Price: $${priceAfter.toFixed(6)}\n`);
 
     console.log("=".repeat(80));
     console.log("✅ TEST PASSED!");

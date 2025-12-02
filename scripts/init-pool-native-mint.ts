@@ -8,13 +8,15 @@ import {
   getOrCreateAssociatedTokenAccount,
   mintTo,
   getAccount,
+  createSyncNativeInstruction,
 } from "@solana/spl-token";
 import { Keypair, Connection, LAMPORTS_PER_SOL, SystemProgram } from "@solana/web3.js";
 import * as fs from "fs";
 
 const VIRTUAL_USDC = 10_000_000_000_000;     // 10M virtual USDC (6 decimals)
 const TRADER_USDC = 10_000_000_000_000;      // 10M USDC for trader (6 decimals)
-const INITIAL_XNT = 10_000_000_000_000_000;  // 10M XNT/wSOL (9 decimals - native SOL decimals)
+const INITIAL_XNT_STR = "10000000000000000"; // 10M XNT/wSOL (9 decimals - as string for BN)
+const INITIAL_XNT = 10_000_000 * LAMPORTS_PER_SOL;  // 10M SOL in lamports
 
 async function main() {
   const walletPath = process.env.ANCHOR_WALLET || process.env.HOME + "/.config/solana/id.json";
@@ -55,8 +57,9 @@ async function main() {
 
   console.log(`✅ Ceiling Reserve PDA: ${ceilingReservePda.toString()}`);
 
-  // Create authority's wSOL account
-  // For native mint, we need to create a wrapped SOL account
+  console.log("\n💰 Creating and wrapping 10M SOL into wSOL for pool initialization...");
+
+  // Create authority's wSOL account - this sends a transaction
   const authorityXntAccount = await getOrCreateAssociatedTokenAccount(
     connection,
     walletKeypair,
@@ -64,20 +67,15 @@ async function main() {
     walletKeypair.publicKey
   );
 
-  console.log("\n💰 Wrapping 10M SOL into wSOL for pool initialization...");
-  // Transfer SOL to the wSOL account to wrap it
+  // Now wrap SOL by transferring to the account and syncing
   const wrapIx = SystemProgram.transfer({
     fromPubkey: walletKeypair.publicKey,
     toPubkey: authorityXntAccount.address,
     lamports: INITIAL_XNT,  // 10M SOL
   });
-  const wrapTx = new anchor.web3.Transaction().add(wrapIx);
+  const syncIx = createSyncNativeInstruction(authorityXntAccount.address);
 
-  // Sync native to make it appear as wSOL tokens
-  const { syncNative } = await import("@solana/spl-token");
-  const syncIx = syncNative(authorityXntAccount.address);
-  wrapTx.add(syncIx);
-
+  const wrapTx = new anchor.web3.Transaction().add(wrapIx, syncIx);
   await provider.sendAndConfirm(wrapTx);
 
   const authorityBalance = await getAccount(connection, authorityXntAccount.address);
@@ -90,7 +88,7 @@ async function main() {
 
   await program.methods
     .initializePool(
-      new anchor.BN(INITIAL_XNT),          // 10M XNT/wSOL (9 decimals)
+      new anchor.BN(INITIAL_XNT_STR),      // 10M XNT/wSOL (9 decimals)
       new anchor.BN(VIRTUAL_USDC),         // virtual_usdc_amount (6 decimals)
       true,                                 // price_floor_enabled
       new anchor.BN(2_000_000),            // price_ceiling ($2.00)
@@ -172,7 +170,7 @@ async function main() {
     lamports: INITIAL_XNT,  // 10M SOL
   });
   const wrapReserveTx = new anchor.web3.Transaction().add(wrapReserveIx);
-  const syncReserveIx = syncNative(ceilingReserveWSOL.address);
+  const syncReserveIx = createSyncNativeInstruction(ceilingReserveWSOL.address);
   wrapReserveTx.add(syncReserveIx);
   await provider.sendAndConfirm(wrapReserveTx);
 
@@ -181,7 +179,7 @@ async function main() {
 
   // Verify pool state
   const pool = await program.account.pool.fetch(poolPda);
-  const price = pool.usdcReserve.toNumber() / pool.xntReserve.toNumber();
+  const priceNum = Number(pool.usdcReserve.toString()) / Number(pool.xntReserve.toString());
 
   console.log("\n" + "=".repeat(60));
   console.log("🎉 INITIALIZATION COMPLETE!");
@@ -191,9 +189,9 @@ async function main() {
   console.log(`💵 USDC Mint: ${usdcMint.toString()}`);
   console.log(`🛡️ Ceiling Reserve wSOL: ${ceilingReserveWSOL.address.toString()}`);
   console.log(`\n📈 Pool State:`);
-  console.log(`   XNT/wSOL Reserve: ${(pool.xntReserve.toNumber() / 1e9).toLocaleString()} wSOL`);
-  console.log(`   USDC Reserve (Virtual): ${(pool.usdcReserve.toNumber() / 1e6).toLocaleString()} USDC`);
-  console.log(`   Price: $${price.toFixed(2)}`);
+  console.log(`   XNT/wSOL Reserve: ${(Number(pool.xntReserve.toString()) / 1e9).toLocaleString()} wSOL`);
+  console.log(`   USDC Reserve (Virtual): ${(Number(pool.usdcReserve.toString()) / 1e6).toLocaleString()} USDC`);
+  console.log(`   Price: $${priceNum.toFixed(6)}`);
   console.log(`\n👤 Trader: ${traderKeypair.publicKey.toString()}`);
   console.log(`   SOL: ${(traderSolBalance / LAMPORTS_PER_SOL).toLocaleString()} SOL`);
   console.log(`   USDC: ${(Number(traderUsdcBalance.amount) / 1e6).toLocaleString()} USDC`);
