@@ -44,7 +44,7 @@ const fs = require('fs');
 
 (async () => {
   const connection = new anchor.web3.Connection('http://localhost:8899', 'confirmed');
-  const poolAddress = new anchor.web3.PublicKey('AhM1YRfKCqjg7HbFa7M1VswSVcHimMH77Lxd4vVVjf12');
+  const poolAddress = new anchor.web3.PublicKey('GoauTxG6k1YLoBh9xwJ5UWuiJtCnvRgYnovKfhjY6UAF');
 
   // Read pool data directly without using anchor decode
   const poolAccountInfo = await connection.getAccountInfo(poolAddress);
@@ -85,7 +85,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'AhM1YRfKCqjg7HbFa7M1VswSVcHimMH77Lxd4vVVjf12';
+        const poolAddress = 'GoauTxG6k1YLoBh9xwJ5UWuiJtCnvRgYnovKfhjY6UAF';
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/web-buy.ts ${amount} ${poolAddress}`;
 
@@ -141,7 +141,7 @@ const fs = require('fs');
   anchor.setProvider(provider);
   const program = anchor.workspace.BondingCurve;
 
-  const poolAddress = new anchor.web3.PublicKey('AhM1YRfKCqjg7HbFa7M1VswSVcHimMH77Lxd4vVVjf12');
+  const poolAddress = new anchor.web3.PublicKey('GoauTxG6k1YLoBh9xwJ5UWuiJtCnvRgYnovKfhjY6UAF');
   const pool = await program.account.pool.fetch(poolAddress);
 
   console.log(JSON.stringify({
@@ -181,7 +181,7 @@ const fs = require('fs');
   anchor.setProvider(provider);
   const program = anchor.workspace.BondingCurve;
 
-  const poolAddress = new anchor.web3.PublicKey('AhM1YRfKCqjg7HbFa7M1VswSVcHimMH77Lxd4vVVjf12');
+  const poolAddress = new anchor.web3.PublicKey('GoauTxG6k1YLoBh9xwJ5UWuiJtCnvRgYnovKfhjY6UAF');
   const pool = await program.account.pool.fetch(poolAddress);
 
   const reserveInfo = await connection.getTokenAccountBalance(pool.ceilingReserveXnt);
@@ -216,7 +216,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'AhM1YRfKCqjg7HbFa7M1VswSVcHimMH77Lxd4vVVjf12';
+        const poolAddress = 'GoauTxG6k1YLoBh9xwJ5UWuiJtCnvRgYnovKfhjY6UAF';
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
 const anchor = require('@coral-xyz/anchor');
@@ -286,7 +286,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'AhM1YRfKCqjg7HbFa7M1VswSVcHimMH77Lxd4vVVjf12';
+        const poolAddress = 'GoauTxG6k1YLoBh9xwJ5UWuiJtCnvRgYnovKfhjY6UAF';
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
 const anchor = require('@coral-xyz/anchor');
@@ -362,7 +362,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'AhM1YRfKCqjg7HbFa7M1VswSVcHimMH77Lxd4vVVjf12';
+        const poolAddress = 'GoauTxG6k1YLoBh9xwJ5UWuiJtCnvRgYnovKfhjY6UAF';
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/web-sell.ts ${amount} ${poolAddress}`;
 
@@ -425,7 +425,7 @@ const fs = require('fs');
   anchor.setProvider(provider);
   const program = anchor.workspace.BondingCurve;
 
-  const poolAddress = new anchor.web3.PublicKey('AhM1YRfKCqjg7HbFa7M1VswSVcHimMH77Lxd4vVVjf12');
+  const poolAddress = new anchor.web3.PublicKey('GoauTxG6k1YLoBh9xwJ5UWuiJtCnvRgYnovKfhjY6UAF');
   const pool = await program.account.pool.fetch(poolAddress);
   const xntMint = pool.xntMint;
 
@@ -547,86 +547,17 @@ const fs = require('fs');
     return;
   }
 
-  // API endpoint to unwrap SOL
+  // API endpoint to unwrap SOL (no longer needed - XNT is now native wSOL)
   if (parsedUrl.pathname === '/api/unwrap' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => { body += chunk.toString(); });
-    req.on('end', () => {
-      try {
-        const { amount, poolAddress } = JSON.parse(body);
-
-        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
-const anchor = require('@coral-xyz/anchor');
-const { TOKEN_PROGRAM_ID, getOrCreateAssociatedTokenAccount } = require('@solana/spl-token');
-const { Connection, Keypair, PublicKey } = require('@solana/web3.js');
-const fs = require('fs');
-
-(async () => {
-  const connection = new Connection('http://localhost:8899', 'confirmed');
-  const traderData = JSON.parse(fs.readFileSync('/tmp/trader-wallet.json', 'utf8'));
-  const trader = Keypair.fromSecretKey(new Uint8Array(traderData));
-
-  const walletPath = process.env.ANCHOR_WALLET || process.env.HOME + '/.config/solana/id.json';
-  const mainWallet = Keypair.fromSecretKey(Buffer.from(JSON.parse(fs.readFileSync(walletPath, 'utf-8'))));
-  const wallet = new anchor.Wallet(mainWallet);
-  const provider = new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
-  anchor.setProvider(provider);
-  const program = anchor.workspace.BondingCurve;
-
-  const poolPubkey = new PublicKey('${poolAddress}');
-  const pool = await program.account.pool.fetch(poolPubkey);
-  const xntMint = pool.xntMint;
-
-  // Derive sol_vault PDA
-  const [solVault] = PublicKey.findProgramAddressSync(
-    [Buffer.from('sol_vault'), poolPubkey.toBuffer()],
-    program.programId
-  );
-
-  const traderXnt = await getOrCreateAssociatedTokenAccount(connection, mainWallet, xntMint, trader.publicKey);
-
-  const tx = await program.methods
-    .unwrapSol(new anchor.BN(${amount}))
-    .accountsPartial({
-      user: trader.publicKey,
-      pool: poolPubkey,
-      solVault: solVault,
-      poolXnt: pool.poolXnt,
-      userXnt: traderXnt.address,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      systemProgram: anchor.web3.SystemProgram.programId,
-    })
-    .signers([trader])
-    .rpc();
-
-  console.log(JSON.stringify({ success: true, tx }));
-})().catch(e => console.log(JSON.stringify({ success: false, error: e.message })));
-"`;
-
-        exec(cmd, (error, stdout, stderr) => {
-          try {
-            // Try to parse the last line of stdout as JSON
-            const lines = stdout.trim().split('\n');
-            const lastLine = lines[lines.length - 1];
-            const result = JSON.parse(lastLine);
-
-            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-            res.end(JSON.stringify(result));
-          } catch (parseError) {
-            // If parsing fails, return the error with details
-            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-            res.end(JSON.stringify({
-              success: false,
-              error: 'Transaction failed - see details',
-              details: stdout || stderr || (error ? error.message : 'Unknown error')
-            }));
-          }
-        });
-      } catch (e) {
-        res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-        res.end(JSON.stringify({ success: false, error: e.message }));
-      }
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
     });
+    res.end(JSON.stringify({
+      success: false,
+      error: 'Unwrap not needed - XNT is now native wSOL (wrapped SOL)',
+      message: 'XNT tokens are standard wSOL. You can unwrap wSOL to SOL using any Solana wallet.'
+    }));
     return;
   }
 
@@ -699,7 +630,7 @@ staticServer.listen(PORT, () => {
   console.log('  3. Open http://localhost:' + PORT + '/trading in your browser');
   console.log('  4. Create a wallet and start trading!');
   console.log('');
-  console.log('💡 Current Pool Address: AhM1YRfKCqjg7HbFa7M1VswSVcHimMH77Lxd4vVVjf12');
+  console.log('💡 Current Pool Address: GoauTxG6k1YLoBh9xwJ5UWuiJtCnvRgYnovKfhjY6UAF');
   console.log('');
   console.log('Press Ctrl+C to stop the server\n');
 });
