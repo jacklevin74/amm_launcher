@@ -13,10 +13,10 @@ import {
 import { Keypair, Connection, LAMPORTS_PER_SOL, SystemProgram } from "@solana/web3.js";
 import * as fs from "fs";
 
-const VIRTUAL_USDC = 10_000_000_000_000;     // 10M virtual USDC (6 decimals)
-const TRADER_USDC = 10_000_000_000_000;      // 10M USDC for trader (6 decimals)
-const INITIAL_XNT_STR = "10000000000000000"; // 10M XNT/wSOL (9 decimals) for 1:1 ratio with 10M USDC
-const INITIAL_XNT = 10_000_000 * LAMPORTS_PER_SOL;  // 10M SOL in lamports
+const VIRTUAL_USDC_STR = "10000000000000000"; // 10M virtual USDC (9 decimals) = 10,000,000 * 1e9
+const TRADER_USDC_STR = "10000000000000000";  // 10M USDC for trader (9 decimals)
+const INITIAL_XNT_STR = "10000000000000000";  // 10M XNT/wSOL (9 decimals) = 10,000,000 * 1e9
+const INITIAL_XNT = 10_000_000 * LAMPORTS_PER_SOL;  // 10M SOL in lamports for wrapping
 
 async function main() {
   const walletPath = process.env.ANCHOR_WALLET || process.env.HOME + "/.config/solana/id.json";
@@ -36,8 +36,8 @@ async function main() {
   console.log("📊 Using native SOL mint for XNT (wSOL)...");
   const xntMint = NATIVE_MINT;  // So11111111111111111111111111111111111111112
 
-  console.log("📊 Creating USDC mint...");
-  const usdcMint = await createMint(connection, walletKeypair, walletKeypair.publicKey, null, 6);
+  console.log("📊 Creating USDC mint with 9 decimals (matching wSOL)...");
+  const usdcMint = await createMint(connection, walletKeypair, walletKeypair.publicKey, null, 9);
 
   console.log(`✅ XNT Mint (Native wSOL): ${xntMint.toString()}`);
   console.log(`✅ USDC Mint: ${usdcMint.toString()}`);
@@ -88,11 +88,11 @@ async function main() {
 
   await program.methods
     .initializePool(
-      new anchor.BN(INITIAL_XNT_STR),      // 10M XNT/wSOL (9 decimals)
-      new anchor.BN(VIRTUAL_USDC),         // virtual_usdc_amount (6 decimals)
+      new anchor.BN(INITIAL_XNT_STR),       // 10M XNT/wSOL (9 decimals)
+      new anchor.BN(VIRTUAL_USDC_STR),      // virtual_usdc_amount (10B USDC in atomic units)
       true,                                 // price_floor_enabled
-      new anchor.BN(2_000_000),            // price_ceiling ($2.00)
-      new anchor.BN(1_000_000)             // price_floor ($1.00)
+      new anchor.BN(2_000_000),             // price_ceiling ($2.00)
+      new anchor.BN(1_000_000)              // price_floor ($1.00)
     )
     .accountsPartial({
       initializer: walletKeypair.publicKey,
@@ -146,11 +146,11 @@ async function main() {
     usdcMint,
     traderUsdcAccount.address,
     walletKeypair.publicKey,
-    TRADER_USDC
+    BigInt(TRADER_USDC_STR)
   );
 
   const traderUsdcBalance = await getAccount(connection, traderUsdcAccount.address);
-  console.log(`✅ Trader USDC Balance: ${(Number(traderUsdcBalance.amount) / 1e6).toLocaleString()} USDC`);
+  console.log(`✅ Trader USDC Balance: ${(Number(traderUsdcBalance.amount) / 1e9).toLocaleString()} USDC`);
 
   // Fund ceiling reserve with 10M wSOL
   console.log("\n🛡️ Funding ceiling reserve with 10M wSOL...");
@@ -179,7 +179,7 @@ async function main() {
 
   // Verify pool state
   const pool = await program.account.pool.fetch(poolPda);
-  const priceNum = (Number(pool.usdcReserve.toString()) / Number(pool.xntReserve.toString())) * 1000;
+  const priceNum = Number(pool.usdcReserve.toString()) / Number(pool.xntReserve.toString());
 
   console.log("\n" + "=".repeat(60));
   console.log("🎉 INITIALIZATION COMPLETE!");
@@ -190,11 +190,11 @@ async function main() {
   console.log(`🛡️ Ceiling Reserve wSOL: ${ceilingReserveWSOL.address.toString()}`);
   console.log(`\n📈 Pool State:`);
   console.log(`   XNT/wSOL Reserve: ${(Number(pool.xntReserve.toString()) / 1e9).toLocaleString()} wSOL`);
-  console.log(`   USDC Reserve (Virtual): ${(Number(pool.usdcReserve.toString()) / 1e6).toLocaleString()} USDC`);
+  console.log(`   USDC Reserve (Virtual): ${(Number(pool.usdcReserve.toString()) / 1e9).toLocaleString()} USDC`);
   console.log(`   Price: $${priceNum.toFixed(6)}`);
   console.log(`\n👤 Trader: ${traderKeypair.publicKey.toString()}`);
   console.log(`   SOL: ${(traderSolBalance / LAMPORTS_PER_SOL).toLocaleString()} SOL`);
-  console.log(`   USDC: ${(Number(traderUsdcBalance.amount) / 1e6).toLocaleString()} USDC`);
+  console.log(`   USDC: ${(Number(traderUsdcBalance.amount) / 1e9).toLocaleString()} USDC`);
   console.log(`\n💡 Note: XNT is now wSOL (native wrapped SOL)`);
   console.log(`   Users can wrap/unwrap SOL ↔ wSOL using standard Solana wallets`);
   console.log(`   No custom wrap/unwrap functions needed!`);

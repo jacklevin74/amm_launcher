@@ -6,13 +6,13 @@ const { Connection, Keypair, PublicKey, Transaction, SystemProgram, LAMPORTS_PER
 // Configuration
 const CONFIG = {
     RPC_URL: 'http://localhost:8899',
-    POOL_ADDRESS: 'GHeiD2nsYyLUqR5YJ9A7axusWbkDaHA7A6NAyYjEiS31', // Pool with 10M wSOL (XNT) and 10M virtual USDC
+    POOL_ADDRESS: 'FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng', // Pool with 10M wSOL and 10M USDC (both 9 decimals) for 1:1 ratio
     PROGRAM_ID: '2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF',
     TOKEN_PROGRAM_ID: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
     ASSOCIATED_TOKEN_PROGRAM_ID: 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
     XNT_MINT: 'So11111111111111111111111111111111111111112', // Native SOL mint (wSOL)
-    CEILING_RESERVE_XNT: '8mU9JpQVnmAYwrUQNWQeFFssL8USUtHDh5YgrH5WWJ7m', // Ceiling reserve wSOL account
-    AIRDROP_AMOUNT: 100_000 * 1e6, // 100K USDC (6 decimals)
+    CEILING_RESERVE_XNT: 'GYd44Nu2cyg72W3hwSW5N9xPZwroNP4MCT8DqjmhnMgr', // Ceiling reserve wSOL account
+    AIRDROP_AMOUNT: 100_000 * 1e9, // 100K USDC (9 decimals)
     POLL_INTERVAL: 2000, // Update UI every 2 seconds
 };
 
@@ -256,8 +256,8 @@ async function updatePrice() {
         const usdcReserve = readU64(data, 176);
 
         // Calculate price: 1 wSOL = 1 USDC
-        // Reserves in atomic units: USDC(6 decimals) / wSOL(9 decimals) * 1000 to adjust
-        const price = (usdcReserve / xntReserve) * 1000;
+        // Pool initialized with 10B USDC and 10M wSOL for 1:1 ratio
+        const price = usdcReserve / xntReserve;
 
         // Update UI
         document.getElementById('currentPrice').textContent = '$' + price.toFixed(6);
@@ -270,7 +270,7 @@ async function updatePrice() {
             const realResponse = await fetch('http://localhost:3030/api/pool-real-reserves');
             const realData = await realResponse.json();
             if (realData && realData.realUsdc !== undefined) {
-                const realUsdc = Number(realData.realUsdc) / 1e6;
+                const realUsdc = Number(realData.realUsdc) / 1e9;
                 document.getElementById('poolRealUsdcReserve').textContent = realUsdc.toLocaleString(undefined, { maximumFractionDigits: 3 });
             } else {
                 // Fallback: show 0 if API doesn't return real USDC
@@ -384,14 +384,14 @@ async function updateBalances() {
 
         // Update UI
         document.getElementById('xntBalance').textContent = (xntBalance / 1e9).toLocaleString();
-        document.getElementById('usdcBalance').textContent = (usdcBalance / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('usdcBalance').textContent = (usdcBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
         document.getElementById('solBalance').textContent = (solBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         // Update position summary (only if poolData is available)
         if (poolData && poolData.price) {
             const xntValueUSDC = (xntBalance / 1e9) * poolData.price;
             const solValueUSDC = (solBalance / 1e9) * poolData.price; // 1 SOL = 1 XNT = poolData.price USDC
-            const usdcValue = usdcBalance / 1e6; // USDC is already in USDC
+            const usdcValue = usdcBalance / 1e9; // USDC is already in USDC
             const totalPortfolio = xntValueUSDC + solValueUSDC + usdcValue;
 
             document.getElementById('xntValueUSDC').textContent = '$' + xntValueUSDC.toLocaleString();
@@ -438,16 +438,21 @@ function updateQuote() {
                 return;
             }
             // Sell XNT for USDC on AMM
-            const xntAmount = amount * 1e9;
-            const k = poolData.xntReserve * poolData.usdcReserve;
-            const newXntReserve = poolData.xntReserve + xntAmount;
-            const newUsdcReserve = k / newXntReserve;
-            const usdcOut = poolData.usdcReserve - newUsdcReserve;
-            const effectivePrice = (usdcOut / xntAmount) * 1000;
-            const newPrice = (newUsdcReserve / newXntReserve) * 1000;
+            // Now with matching 9 decimals, calculation is simple
+            const xntIn_scaled = amount; // XNT in tokens
+            const xntReserve_s = poolData.xntReserve / 1e9; // XNT in tokens
+            const usdcReserve_s = poolData.usdcReserve / 1e9; // USDC in tokens (now 9 decimals)
+
+            const k_scaled = xntReserve_s * usdcReserve_s;
+            const newXntReserve_s = xntReserve_s + xntIn_scaled;
+            const newUsdcReserve_s = k_scaled / newXntReserve_s;
+            const usdcOut_scaled = usdcReserve_s - newUsdcReserve_s;
+
+            const effectivePrice = usdcOut_scaled / xntIn_scaled;
+            const newPrice = newUsdcReserve_s / newXntReserve_s;
             const priceImpact = ((newPrice / poolData.price) - 1) * 100;
 
-            document.getElementById('quoteReceive').textContent = (usdcOut / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('quoteReceive').textContent = usdcOut_scaled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('quotePrice').textContent = '$' + effectivePrice.toFixed(6);
             document.getElementById('quotePriceImpact').textContent = (priceImpact >= 0 ? '+' : '') + priceImpact.toFixed(2) + '%';
             document.getElementById('quoteNewPrice').textContent = '$' + newPrice.toFixed(6);
@@ -459,16 +464,21 @@ function updateQuote() {
                 return;
             }
             // Buy XNT with USDC on AMM
-            const usdcAmount = amount * 1e6;
-            const k2 = poolData.xntReserve * poolData.usdcReserve;
-            const newUsdcReserve2 = poolData.usdcReserve + usdcAmount;
-            const newXntReserve2 = k2 / newUsdcReserve2;
-            const xntOut = poolData.xntReserve - newXntReserve2;
-            const effectivePrice2 = (usdcAmount / xntOut) * 1000;
-            const newPrice2 = (newUsdcReserve2 / newXntReserve2) * 1000;
+            // Now with matching 9 decimals, calculation is simple
+            const usdcIn_scaled = amount; // USDC in tokens
+            const xntReserve_scaled = poolData.xntReserve / 1e9; // XNT in tokens
+            const usdcReserve_scaled = poolData.usdcReserve / 1e9; // USDC in tokens (now 9 decimals)
+
+            const k2_scaled = xntReserve_scaled * usdcReserve_scaled;
+            const newUsdcReserve_scaled = usdcReserve_scaled + usdcIn_scaled;
+            const newXntReserve_scaled = k2_scaled / newUsdcReserve_scaled;
+            const xntOut_scaled = xntReserve_scaled - newXntReserve_scaled;
+
+            const effectivePrice2 = usdcIn_scaled / xntOut_scaled;
+            const newPrice2 = newUsdcReserve_scaled / newXntReserve_scaled;
             const priceImpact2 = ((newPrice2 / poolData.price) - 1) * 100;
 
-            document.getElementById('quoteReceive').textContent = (xntOut / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('quoteReceive').textContent = xntOut_scaled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('quotePrice').textContent = '$' + effectivePrice2.toFixed(6);
             document.getElementById('quotePriceImpact').textContent = (priceImpact2 >= 0 ? '+' : '') + priceImpact2.toFixed(2) + '%';
             document.getElementById('quoteNewPrice').textContent = '$' + newPrice2.toFixed(6);
@@ -497,7 +507,7 @@ async function executeBuy() {
         return;
     }
 
-    const amountWithDecimals = Math.floor(amount * 1e6);
+    const amountWithDecimals = Math.floor(amount * 1e9);
 
     try {
         document.getElementById('swapBtn').disabled = true;
@@ -651,7 +661,7 @@ async function executeBuySOLWithUSDC() {
         // Buy XNT (wSOL) with USDC on AMM
         showStatus(`Buying wSOL with ${usdcAmount} USDC...`, 'info');
         addLog(`Buying XNT (wSOL) with ${usdcAmount} USDC on AMM...`, 'info');
-        const usdcWithDecimals = Math.floor(usdcAmount * 1e6);
+        const usdcWithDecimals = Math.floor(usdcAmount * 1e9);
         const buyResponse = await fetch('/api/buy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
