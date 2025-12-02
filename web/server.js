@@ -648,16 +648,17 @@ const fs = require('fs');
     return;
   }
 
-  let filePath = req.url;
-  if (req.url === '/' || req.url === '/trading') {
+  // Strip query string from URL
+  let filePath = parsedUrl.pathname;
+  if (filePath === '/' || filePath === '/trading') {
     filePath = '/trading.html';
-  } else if (req.url === '/admin') {
+  } else if (filePath === '/admin') {
     filePath = '/admin.html';
-  } else if (req.url === '/wrap') {
+  } else if (filePath === '/wrap') {
     filePath = '/wrap.html';
-  } else if (req.url === '/c64/trading') {
+  } else if (filePath === '/c64/trading') {
     filePath = '/c64/trading.html';
-  } else if (req.url === '/c64/admin') {
+  } else if (filePath === '/c64/admin') {
     filePath = '/c64/admin.html';
   }
   const fullPath = path.join(__dirname, filePath);

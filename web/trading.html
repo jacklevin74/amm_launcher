@@ -520,6 +520,10 @@
                                 <div class="amount" id="solBalance">0</div>
                             </div>
                             <div class="balance-item">
+                                <div class="label">USDC BALANCE</div>
+                                <div class="amount" id="usdcBalance">0</div>
+                            </div>
+                            <div class="balance-item">
                                 <div class="label">XNT BALANCE (Wrapped)</div>
                                 <div class="amount" id="xntBalance">0</div>
                             </div>
@@ -586,22 +590,27 @@
                 </div>
 
                 <div class="trade-form">
-                    <!-- Uniswap-style token input card -->
+                    <!-- Mode Selector -->
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(102, 170, 187, 0.05); border: 1px solid #6ab;">
+                        <div style="margin-bottom: 10px; color: #8bc; font-weight: bold;">SELECT TRADING MODE:</div>
+                        <select id="tradingModeSelect" onchange="handleTradingModeChange()" style="width: 100%; padding: 10px; background: rgba(102, 170, 187, 0.1); border: 1px solid #6ab; color: #6ab; font-family: 'Courier New', monospace; font-size: 1em;">
+                            <option value="sell_usdc_for_sol" selected>BUY XNT: Pay USDC</option>
+                            <option value="buy_usdc_with_sol">SELL XNT: Get USDC</option>
+                        </select>
+                    </div>
+
+                    <!-- Amount Input -->
                     <div class="token-input-card">
                         <div class="token-input-header">
                             <span class="input-label" id="inputLabel">You pay</span>
-                            <select id="paymentTokenSelect" onchange="handlePaymentTokenChange()" style="padding: 5px; background: rgba(102, 170, 187, 0.1); border: 1px solid #6ab; color: #6ab; font-family: 'Courier New', monospace; margin-left: 10px;">
-                                <option value="USDC">Pay with USDC</option>
-                                <option value="SOL">Pay with SOL</option>
-                            </select>
                         </div>
                         <div class="token-input-body">
-                            <input type="number" id="tradeAmount" class="token-amount-input" placeholder="0.0" min="0" step="1000" value="10000" oninput="updateQuote()">
+                            <input type="number" id="tradeAmount" class="token-amount-input" placeholder="0.0" min="0" step="1000" value="5000" oninput="updateQuote()">
                             <div class="token-select">
                                 <span class="token-symbol" id="inputToken">USDC</span>
                             </div>
                         </div>
-                        <div class="quick-amounts">
+                        <div class="quick-amounts" id="quickAmounts">
                             <button class="quick-amount-btn" onclick="setAmount(5000)">5K</button>
                             <button class="quick-amount-btn" onclick="setAmount(10000)">10K</button>
                             <button class="quick-amount-btn" onclick="setAmount(25000)">25K</button>
@@ -609,13 +618,13 @@
                         </div>
                     </div>
 
-                    <!-- Swap arrow (clickable toggle) -->
-                    <button class="swap-arrow" onclick="toggleSwapDirection()">↓</button>
+                    <!-- Arrow showing direction -->
+                    <div style="text-align: center; font-size: 2em; color: #8bc; margin: 10px 0;">↓</div>
 
-                    <!-- Token output card -->
+                    <!-- Output Display -->
                     <div class="token-input-card" id="quoteDisplay">
                         <div class="token-input-header">
-                            <span class="input-label" id="outputLabel">You receive</span>
+                            <span class="input-label">You receive</span>
                         </div>
                         <div class="token-input-body">
                             <div class="token-amount-display" id="quoteReceive">0.0</div>
@@ -625,20 +634,20 @@
                         </div>
 
                         <!-- Trade details -->
-                        <div class="trade-details-inline">
+                        <div class="trade-details-inline" id="tradeDetails">
                             <div class="detail-row">
-                                <span>You Pay</span>
-                                <span id="quotePay">-</span>
+                                <span>Mode</span>
+                                <span id="modeDescription">Buy XNT on AMM pool</span>
                             </div>
-                            <div class="detail-row">
+                            <div class="detail-row" id="priceRow" style="display: flex;">
                                 <span>Price</span>
                                 <span id="quotePrice">-</span>
                             </div>
-                            <div class="detail-row">
+                            <div class="detail-row" id="impactRow" style="display: flex;">
                                 <span>Price Impact</span>
                                 <span id="quotePriceImpact">-</span>
                             </div>
-                            <div class="detail-row">
+                            <div class="detail-row" id="newPriceRow" style="display: flex;">
                                 <span>New Pool Price</span>
                                 <span id="quoteNewPrice">-</span>
                             </div>
@@ -647,7 +656,7 @@
 
                     <div class="btn-group">
                         <button class="btn-buy" onclick="executeSwap()" id="swapBtn" disabled>
-                            Swap
+                            <span id="swapBtnText">BUY XNT WITH USDC</span>
                         </button>
                         <button class="btn-secondary" onclick="resetTrading()">
                             Reset
@@ -657,9 +666,20 @@
             </div>
         </div>
 
+        <!-- Transaction Log Panel -->
+        <div class="panel" style="margin-top: 20px;">
+            <h2>TRANSACTION LOG</h2>
+            <div id="transactionLog" style="max-height: 300px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.85em;">
+                <div style="color: #8bc; padding: 10px; border-left: 2px solid #6ab; background: rgba(102, 170, 187, 0.05); margin: 5px 0;">
+                    Transaction log will appear here...
+                </div>
+            </div>
+            <button class="btn-secondary" onclick="clearLog()" style="margin-top: 10px; width: 150px;">Clear Log</button>
+        </div>
+
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <script src="trading-app.js"></script>
+    <script src="trading-app.js?v=10"></script>
 </body>
 </html>

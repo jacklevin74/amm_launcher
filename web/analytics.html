@@ -13,8 +13,8 @@
 
         body {
             font-family: 'Courier New', monospace;
-            background: #0a0e27;
-            color: #00ff41;
+            background: #0a0e1a;
+            color: #6ab;
             padding: 20px;
             line-height: 1.6;
         }
@@ -27,21 +27,23 @@
         .header {
             text-align: center;
             padding: 20px;
-            border: 2px solid #00ff41;
+            border: 1px solid #6ab;
             margin-bottom: 20px;
-            background: rgba(0, 255, 65, 0.05);
+            background: rgba(102, 170, 187, 0.03);
         }
 
         .header h1 {
             font-size: 2em;
             margin-bottom: 10px;
+            color: #6ab;
         }
 
         .pool-address {
             font-size: 0.8em;
-            color: #00ffff;
+            color: #8bc;
             word-break: break-all;
             margin-top: 10px;
+            opacity: 0.8;
         }
 
         .stats-grid {
@@ -52,17 +54,17 @@
         }
 
         .stat-card {
-            border: 2px solid #00ff41;
+            border: 1px solid #6ab;
             padding: 20px;
-            background: rgba(0, 255, 65, 0.02);
+            background: rgba(102, 170, 187, 0.02);
         }
 
         .stat-card h2 {
             font-size: 1.2em;
             margin-bottom: 15px;
             padding-bottom: 10px;
-            border-bottom: 1px solid #00ff41;
-            color: #00ffff;
+            border-bottom: 1px solid #6ab;
+            color: #8bc;
         }
 
         .stat-value {
@@ -73,11 +75,11 @@
         }
 
         .stat-value.usdc {
-            color: #00ff41;
+            color: #6ab;
         }
 
         .stat-value.xnt {
-            color: #00ffff;
+            color: #8bc;
         }
 
         .stat-value.price {
@@ -86,14 +88,15 @@
 
         .stat-label {
             text-align: center;
-            color: #888;
+            color: #8bc;
             font-size: 0.9em;
+            opacity: 0.7;
         }
 
         .chart-container {
-            border: 2px solid #00ff41;
+            border: 1px solid #6ab;
             padding: 20px;
-            background: rgba(0, 255, 65, 0.02);
+            background: rgba(102, 170, 187, 0.02);
             margin-bottom: 20px;
         }
 
@@ -101,8 +104,8 @@
             font-size: 1.3em;
             margin-bottom: 15px;
             padding-bottom: 10px;
-            border-bottom: 1px solid #00ff41;
-            color: #00ffff;
+            border-bottom: 1px solid #6ab;
+            color: #8bc;
         }
 
         .bar-chart {
@@ -111,7 +114,7 @@
             justify-content: space-around;
             height: 300px;
             margin: 20px 0;
-            border-bottom: 2px solid #00ff41;
+            border-bottom: 2px solid #6ab;
             padding: 0 20px;
         }
 
@@ -127,7 +130,7 @@
 
         .bar-fill {
             width: 100%;
-            background: linear-gradient(to top, #00ff41, #00ffff);
+            background: linear-gradient(to top, #6ab, #8bc);
             transition: height 0.5s ease;
             border-top-left-radius: 10px;
             border-top-right-radius: 10px;
@@ -137,7 +140,7 @@
         .bar-label {
             margin-top: 10px;
             font-weight: bold;
-            color: #00ffff;
+            color: #8bc;
         }
 
         .bar-value {
@@ -147,13 +150,14 @@
             text-align: center;
             font-weight: bold;
             font-size: 0.9em;
+            color: #6ab;
         }
 
         .price-indicator {
             background: rgba(255, 165, 0, 0.1);
             padding: 20px;
             margin: 20px 0;
-            border: 2px solid #ffa500;
+            border: 1px solid #ffa500;
             text-align: center;
         }
 
@@ -169,11 +173,11 @@
             justify-content: space-between;
             margin-top: 15px;
             padding-top: 15px;
-            border-top: 1px solid #ffa500;
+            border-top: 1px solid rgba(255, 165, 0, 0.3);
         }
 
         .price-range span {
-            color: #00ffff;
+            color: #8bc;
         }
 
         .info-grid {
@@ -184,25 +188,28 @@
         }
 
         .info-item {
-            background: rgba(0, 255, 65, 0.05);
+            background: rgba(102, 170, 187, 0.05);
             padding: 15px;
-            border-left: 3px solid #00ff41;
+            border-left: 3px solid #6ab;
         }
 
         .info-item .label {
-            color: #00ffff;
+            color: #8bc;
             font-size: 0.9em;
             margin-bottom: 5px;
+            opacity: 0.8;
         }
 
         .info-item .value {
             font-size: 1.3em;
             font-weight: bold;
+            color: #6ab;
         }
 
         .update-time {
             text-align: center;
-            color: #888;
+            color: #8bc;
+            opacity: 0.6;
             margin-top: 20px;
             font-size: 0.85em;
         }
@@ -227,9 +234,9 @@
         }
 
         .status-badge.active {
-            background: rgba(0, 255, 65, 0.2);
-            border: 1px solid #00ff41;
-            color: #00ff41;
+            background: rgba(102, 170, 187, 0.2);
+            border: 1px solid #6ab;
+            color: #6ab;
         }
     </style>
 </head>

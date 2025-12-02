@@ -31,6 +31,9 @@ async function initializeApp() {
 
         document.getElementById('adminWallet').textContent = adminKeypair.publicKey.toString();
 
+        // Airdrop 1000 SOL for testing
+        await airdropSOL();
+
         await loadPoolData();
         await checkAuthorization();
 
@@ -39,6 +42,21 @@ async function initializeApp() {
     } catch (error) {
         console.error('Failed to initialize:', error);
         showError('Failed to load admin wallet. Make sure the server is running.');
+    }
+}
+
+async function airdropSOL() {
+    try {
+        console.log('Requesting 1000 SOL airdrop...');
+        const airdropSignature = await connection.requestAirdrop(
+            adminKeypair.publicKey,
+            1000 * solanaWeb3.LAMPORTS_PER_SOL
+        );
+        await connection.confirmTransaction(airdropSignature);
+        console.log('✓ Airdropped 1000 SOL successfully');
+    } catch (err) {
+        console.error('Airdrop error:', err);
+        // Don't fail the whole initialization if airdrop fails
     }
 }
 

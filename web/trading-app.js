@@ -25,8 +25,7 @@ let totalXntBought = 0;
 let totalUsdcReceived = 0;
 let totalXntSold = 0;
 let priceUpdateInterval = null;
-let swapDirection = 'buy'; // 'buy' (USDC→XNT) or 'sell' (XNT→USDC)
-let paymentToken = 'USDC'; // 'USDC' or 'SOL' - which token to use for payment
+let tradingMode = 'sell_usdc_for_sol'; // Trading mode: buy_usdc_with_sol, sell_usdc_for_sol (default to buying XNT)
 
 // Initialize connection
 async function init() {
@@ -141,26 +140,48 @@ function updateWalletUI() {
 }
 
 // Handle payment token change
-function handlePaymentTokenChange() {
-    const select = document.getElementById('paymentTokenSelect');
-    paymentToken = select.value;
-    console.log('Payment token changed to:', paymentToken);
+// Handle trading mode change
+function handleTradingModeChange() {
+    const select = document.getElementById('tradingModeSelect');
+    tradingMode = select.value;
+    console.log('Trading mode changed to:', tradingMode);
 
-    // Update the input token display based on swap direction and payment token
-    updateTokenDisplay();
+    updateTradingModeUI();
     updateQuote();
 }
 
-// Update token display based on direction and payment method
-function updateTokenDisplay() {
-    if (swapDirection === 'buy') {
-        // Buying XNT
-        document.getElementById('inputToken').textContent = paymentToken;
-        document.getElementById('outputToken').textContent = 'XNT';
-    } else {
-        // Selling XNT
-        document.getElementById('inputToken').textContent = 'XNT';
-        document.getElementById('outputToken').textContent = paymentToken;
+// Update UI based on trading mode
+function updateTradingModeUI() {
+    const inputToken = document.getElementById('inputToken');
+    const outputToken = document.getElementById('outputToken');
+    const modeDesc = document.getElementById('modeDescription');
+    const swapBtnText = document.getElementById('swapBtnText');
+    const priceRow = document.getElementById('priceRow');
+    const impactRow = document.getElementById('impactRow');
+    const newPriceRow = document.getElementById('newPriceRow');
+    const quickAmounts = document.getElementById('quickAmounts');
+
+    switch(tradingMode) {
+        case 'buy_usdc_with_sol':
+            inputToken.textContent = 'XNT';
+            outputToken.textContent = 'USDC';
+            modeDesc.textContent = 'Sell XNT on AMM pool';
+            swapBtnText.textContent = 'SELL XNT FOR USDC';
+            priceRow.style.display = 'flex';
+            impactRow.style.display = 'flex';
+            newPriceRow.style.display = 'flex';
+            quickAmounts.innerHTML = '<button class="quick-amount-btn" onclick="setAmount(10)">10</button><button class="quick-amount-btn" onclick="setAmount(100)">100</button><button class="quick-amount-btn" onclick="setAmount(1000)">1K</button><button class="quick-amount-btn" onclick="setAmount(10000)">10K</button>';
+            break;
+        case 'sell_usdc_for_sol':
+            inputToken.textContent = 'USDC';
+            outputToken.textContent = 'XNT';
+            modeDesc.textContent = 'Buy XNT on AMM pool';
+            swapBtnText.textContent = 'BUY XNT WITH USDC';
+            priceRow.style.display = 'flex';
+            impactRow.style.display = 'flex';
+            newPriceRow.style.display = 'flex';
+            quickAmounts.innerHTML = '<button class="quick-amount-btn" onclick="setAmount(5000)">5K</button><button class="quick-amount-btn" onclick="setAmount(10000)">10K</button><button class="quick-amount-btn" onclick="setAmount(25000)">25K</button><button class="quick-amount-btn" onclick="setAmount(50000)">50K</button>';
+            break;
     }
 }
 
@@ -295,9 +316,13 @@ async function getAssociatedTokenAddress(mint, owner) {
 
 // Update balances
 async function updateBalances() {
-    if (!wallet || !poolData) {
-        console.log('updateBalances: wallet or poolData not ready', { wallet: !!wallet, poolData: !!poolData });
+    if (!wallet) {
+        console.log('updateBalances: wallet not ready');
         return;
+    }
+
+    if (!poolData) {
+        console.log('updateBalances: poolData not ready yet, will update when available');
     }
 
     try {
@@ -324,6 +349,7 @@ async function updateBalances() {
 
         // Get balances
         let xntBalance = 0;
+        let usdcBalance = 0;
         let solBalance = 0;
 
         try {
@@ -332,6 +358,15 @@ async function updateBalances() {
             console.log('updateBalances: XNT balance', xntBalance);
         } catch (e) {
             console.log('updateBalances: XNT account does not exist yet', e.message);
+        }
+
+        // Get USDC balance
+        try {
+            const usdcAccountInfo = await connection.getTokenAccountBalance(userUsdcAccount);
+            usdcBalance = parseInt(usdcAccountInfo.value.amount);
+            console.log('updateBalances: USDC balance', usdcBalance);
+        } catch (e) {
+            console.log('updateBalances: USDC account does not exist yet', e.message);
         }
 
         // Get SOL balance
@@ -344,30 +379,34 @@ async function updateBalances() {
 
         // Update UI
         document.getElementById('xntBalance').textContent = (xntBalance / 1e6).toLocaleString();
+        document.getElementById('usdcBalance').textContent = (usdcBalance / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
         document.getElementById('solBalance').textContent = (solBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-        // Update position summary
-        const xntValueUSDC = (xntBalance / 1e6) * poolData.price;
-        const solValueUSDC = (solBalance / 1e9) * poolData.price; // 1 SOL = 1 XNT = poolData.price USDC
-        const totalPortfolio = xntValueUSDC + solValueUSDC;
+        // Update position summary (only if poolData is available)
+        if (poolData && poolData.price) {
+            const xntValueUSDC = (xntBalance / 1e6) * poolData.price;
+            const solValueUSDC = (solBalance / 1e9) * poolData.price; // 1 SOL = 1 XNT = poolData.price USDC
+            const usdcValue = usdcBalance / 1e6; // USDC is already in USDC
+            const totalPortfolio = xntValueUSDC + solValueUSDC + usdcValue;
 
-        document.getElementById('xntValueUSDC').textContent = '$' + xntValueUSDC.toLocaleString();
-        document.getElementById('totalPortfolio').textContent = '$' + totalPortfolio.toLocaleString();
+            document.getElementById('xntValueUSDC').textContent = '$' + xntValueUSDC.toLocaleString();
+            document.getElementById('totalPortfolio').textContent = '$' + totalPortfolio.toLocaleString();
 
-        // Calculate average entry price
-        if (totalXntBought > 0) {
-            const avgEntry = totalUsdcSpent / totalXntBought;
-            document.getElementById('avgEntryPrice').textContent = '$' + avgEntry.toFixed(6);
+            // Calculate average entry price
+            if (totalXntBought > 0) {
+                const avgEntry = totalUsdcSpent / totalXntBought;
+                document.getElementById('avgEntryPrice').textContent = '$' + avgEntry.toFixed(6);
 
-            // Calculate P&L
-            const currentValue = (xntBalance / 1e6) * poolData.price;
-            const costBasis = (xntBalance / 1e6) * avgEntry;
-            const pnl = currentValue - costBasis;
-            const pnlPercent = costBasis > 0 ? (pnl / costBasis * 100) : 0;
+                // Calculate P&L
+                const currentValue = (xntBalance / 1e6) * poolData.price;
+                const costBasis = (xntBalance / 1e6) * avgEntry;
+                const pnl = currentValue - costBasis;
+                const pnlPercent = costBasis > 0 ? (pnl / costBasis * 100) : 0;
 
-            const pnlElement = document.getElementById('pnl');
-            pnlElement.textContent = '$' + pnl.toFixed(2) + ' (' + (pnl >= 0 ? '+' : '') + pnlPercent.toFixed(2) + '%)';
-            pnlElement.className = 'position-value ' + (pnl >= 0 ? 'positive' : 'negative');
+                const pnlElement = document.getElementById('pnl');
+                pnlElement.textContent = '$' + pnl.toFixed(2) + ' (' + (pnl >= 0 ? '+' : '') + pnlPercent.toFixed(2) + '%)';
+                pnlElement.className = 'position-value ' + (pnl >= 0 ? 'positive' : 'negative');
+            }
         }
 
     } catch (error) {
@@ -380,47 +419,55 @@ function updateQuote() {
     const amountInput = document.getElementById('tradeAmount');
     const amount = parseFloat(amountInput.value);
 
-    if (!amount || amount <= 0 || !poolData) {
-        document.getElementById('quoteDisplay').style.display = 'none';
+    if (!amount || amount <= 0) {
+        document.getElementById('quoteReceive').textContent = '0.0';
         return;
     }
 
-    const amountWithDecimals = amount * 1e6; // Convert to base units
-    const currentPrice = poolData.price;
-    const k = poolData.xntReserve * poolData.usdcReserve;
+    document.getElementById('quoteDisplay').style.display = 'block';
 
-    if (swapDirection === 'buy') {
-        // Buy: user pays USDC, gets XNT
-        const newUsdcReserve = poolData.usdcReserve + amountWithDecimals;
-        const newXntReserve = k / newUsdcReserve;
-        const xntOut = poolData.xntReserve - newXntReserve;
-        const effectivePrice = amountWithDecimals / xntOut;
-        const newPrice = newUsdcReserve / newXntReserve;
-        const priceImpact = ((newPrice / currentPrice) - 1) * 100;
+    switch(tradingMode) {
+        case 'buy_usdc_with_sol':
+            if (!poolData) {
+                document.getElementById('quoteReceive').textContent = 'Loading...';
+                return;
+            }
+            // Sell XNT for USDC on AMM
+            const xntAmount = amount * 1e6;
+            const k = poolData.xntReserve * poolData.usdcReserve;
+            const newXntReserve = poolData.xntReserve + xntAmount;
+            const newUsdcReserve = k / newXntReserve;
+            const usdcOut = poolData.usdcReserve - newUsdcReserve;
+            const effectivePrice = usdcOut / xntAmount;
+            const newPrice = newUsdcReserve / newXntReserve;
+            const priceImpact = ((newPrice / poolData.price) - 1) * 100;
 
-        // Update quote display
-        document.getElementById('quoteDisplay').style.display = 'block';
-        document.getElementById('quotePay').textContent = (amount / 1000).toFixed(1) + 'K USDC';
-        document.getElementById('quoteReceive').textContent = (xntOut / 1e6).toFixed(2) + ' XNT';
-        document.getElementById('quotePrice').textContent = '$' + effectivePrice.toFixed(6);
-        document.getElementById('quotePriceImpact').textContent = (priceImpact >= 0 ? '+' : '') + priceImpact.toFixed(2) + '%';
-        document.getElementById('quoteNewPrice').textContent = '$' + newPrice.toFixed(6);
-    } else {
-        // Sell: user pays XNT, gets USDC
-        const newXntReserve = poolData.xntReserve + amountWithDecimals;
-        const newUsdcReserve = k / newXntReserve;
-        const usdcOut = poolData.usdcReserve - newUsdcReserve;
-        const effectivePrice = usdcOut / amountWithDecimals;
-        const newPrice = newUsdcReserve / newXntReserve;
-        const priceImpact = ((newPrice / currentPrice) - 1) * 100;
+            document.getElementById('quoteReceive').textContent = (usdcOut / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('quotePrice').textContent = '$' + effectivePrice.toFixed(6);
+            document.getElementById('quotePriceImpact').textContent = (priceImpact >= 0 ? '+' : '') + priceImpact.toFixed(2) + '%';
+            document.getElementById('quoteNewPrice').textContent = '$' + newPrice.toFixed(6);
+            break;
 
-        // Update quote display
-        document.getElementById('quoteDisplay').style.display = 'block';
-        document.getElementById('quotePay').textContent = (amount / 1000).toFixed(1) + 'K XNT';
-        document.getElementById('quoteReceive').textContent = (usdcOut / 1e6).toFixed(2) + ' USDC';
-        document.getElementById('quotePrice').textContent = '$' + effectivePrice.toFixed(6);
-        document.getElementById('quotePriceImpact').textContent = (priceImpact >= 0 ? '+' : '') + priceImpact.toFixed(2) + '%';
-        document.getElementById('quoteNewPrice').textContent = '$' + newPrice.toFixed(6);
+        case 'sell_usdc_for_sol':
+            if (!poolData) {
+                document.getElementById('quoteReceive').textContent = 'Loading...';
+                return;
+            }
+            // Buy XNT with USDC on AMM
+            const usdcAmount = amount * 1e6;
+            const k2 = poolData.xntReserve * poolData.usdcReserve;
+            const newUsdcReserve2 = poolData.usdcReserve + usdcAmount;
+            const newXntReserve2 = k2 / newUsdcReserve2;
+            const xntOut = poolData.xntReserve - newXntReserve2;
+            const effectivePrice2 = usdcAmount / xntOut;
+            const newPrice2 = newUsdcReserve2 / newXntReserve2;
+            const priceImpact2 = ((newPrice2 / poolData.price) - 1) * 100;
+
+            document.getElementById('quoteReceive').textContent = (xntOut / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('quotePrice').textContent = '$' + effectivePrice2.toFixed(6);
+            document.getElementById('quotePriceImpact').textContent = (priceImpact2 >= 0 ? '+' : '') + priceImpact2.toFixed(2) + '%';
+            document.getElementById('quoteNewPrice').textContent = '$' + newPrice2.toFixed(6);
+            break;
     }
 }
 
@@ -517,29 +564,22 @@ async function executeSell() {
     }
 }
 
-// Execute swap (routes to buy or sell based on direction)
+// Execute swap (routes based on mode)
 async function executeSwap() {
-    if (paymentToken === 'SOL') {
-        // Using SOL: need to wrap/unwrap
-        if (swapDirection === 'buy') {
-            await executeSOLBuy();
-        } else {
-            await executeSOLSell();
-        }
-    } else {
-        // Using USDC: direct trading
-        if (swapDirection === 'buy') {
-            await executeBuy();
-        } else {
-            await executeSell();
-        }
+    switch(tradingMode) {
+        case 'buy_usdc_with_sol':
+            await executeSellSOLForUSDC();
+            break;
+        case 'sell_usdc_for_sol':
+            await executeBuySOLWithUSDC();
+            break;
     }
 }
 
-// Execute buy using SOL (wrap SOL→XNT first, then buy with XNT)
-async function executeSOLBuy() {
-    if (!wallet || !poolData) {
-        showStatus('Please wait for wallet and price data to load', 'error');
+// Execute wrap (SOL→XNT)
+async function executeWrap() {
+    if (!wallet) {
+        showStatus('Please wait for wallet to load', 'error');
         return;
     }
 
@@ -554,8 +594,8 @@ async function executeSOLBuy() {
     try {
         document.getElementById('swapBtn').disabled = true;
 
-        // Step 1: Wrap SOL to XNT
-        showStatus(`Step 1/2: Wrapping ${solAmount} SOL to XNT...`, 'info');
+        // Simply wrap SOL to XNT (1:1)
+        showStatus(`Wrapping ${solAmount} SOL to XNT...`, 'info');
         const lamports = Math.floor(solAmount * 1e9);
 
         const wrapResponse = await fetch('/api/wrap', {
@@ -569,33 +609,12 @@ async function executeSOLBuy() {
 
         const wrapResult = await wrapResponse.json();
 
-        if (!wrapResult.success) {
-            throw new Error('Wrap failed: ' + wrapResult.error);
-        }
-
-        showStatus(`✅ Wrapped ${solAmount} SOL to XNT! TX: ${wrapResult.tx.substring(0, 20)}...`, 'success');
-
-        // Step 2: Buy with the wrapped XNT (converted to USDC value)
-        showStatus(`Step 2/2: Buying XNT with wrapped amount...`, 'info');
-
-        // Since 1 SOL = 1 XNT, we now buy using that XNT value in USDC terms
-        const usdcAmount = solAmount * 1000; // Treat as K USDC
-        const amountWithDecimals = Math.floor(usdcAmount * 1e6);
-
-        const buyResponse = await fetch('/api/buy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: amountWithDecimals })
-        });
-
-        const buyResult = await buyResponse.json();
-
-        if (buyResult.success) {
-            showStatus(`✅ BUY successful! Total: Wrapped ${solAmount} SOL + Bought XNT. TX: ${buyResult.tx.substring(0, 20)}...`, 'success');
+        if (wrapResult.success) {
+            showStatus(`✅ Wrapped ${solAmount} SOL → ${solAmount} XNT! TX: ${wrapResult.tx.substring(0, 20)}...`, 'success');
             await updatePrice();
             await updateBalances();
         } else {
-            showStatus('❌ Buy failed: ' + buyResult.error, 'error');
+            throw new Error('Wrap failed: ' + wrapResult.error);
         }
     } catch (error) {
         showStatus('❌ Error: ' + error.message, 'error');
@@ -604,8 +623,55 @@ async function executeSOLBuy() {
     }
 }
 
-// Execute sell using SOL (sell XNT first, then unwrap to SOL)
-async function executeSOLSell() {
+// Execute unwrap (XNT→SOL)
+async function executeUnwrap() {
+    if (!wallet) {
+        showStatus('Please wait for wallet to load', 'error');
+        return;
+    }
+
+    const amountInput = document.getElementById('tradeAmount');
+    const xntAmount = parseFloat(amountInput.value);
+
+    if (!xntAmount || xntAmount <= 0) {
+        showStatus('Please enter a valid amount', 'error');
+        return;
+    }
+
+    try {
+        document.getElementById('swapBtn').disabled = true;
+
+        // Simply unwrap XNT to SOL (1:1)
+        showStatus(`Unwrapping ${xntAmount} XNT to SOL...`, 'info');
+        const amountWithDecimals = Math.floor(xntAmount * 1e6); // XNT base units
+
+        const unwrapResponse = await fetch('/api/unwrap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount: amountWithDecimals,
+                poolAddress: CONFIG.POOL_ADDRESS
+            })
+        });
+
+        const unwrapResult = await unwrapResponse.json();
+
+        if (unwrapResult.success) {
+            showStatus(`✅ Unwrapped ${xntAmount} XNT → ${xntAmount} SOL! TX: ${unwrapResult.tx.substring(0, 20)}...`, 'success');
+            await updatePrice();
+            await updateBalances();
+        } else {
+            throw new Error('Unwrap failed: ' + unwrapResult.error);
+        }
+    } catch (error) {
+        showStatus('❌ Error: ' + error.message, 'error');
+    } finally {
+        document.getElementById('swapBtn').disabled = false;
+    }
+}
+
+// Execute: Sell XNT for USDC (internally: wrap SOL → XNT, then sell XNT for USDC)
+async function executeSellSOLForUSDC() {
     if (!wallet || !poolData) {
         showStatus('Please wait for wallet and price data to load', 'error');
         return;
@@ -622,48 +688,92 @@ async function executeSOLSell() {
     try {
         document.getElementById('swapBtn').disabled = true;
 
-        // Step 1: Sell XNT for USDC
-        showStatus(`Step 1/2: Selling ${xntAmount}K XNT...`, 'info');
-        const amountWithDecimals = Math.floor(xntAmount * 1e3 * 1e6); // K XNT to base units
+        // Step 1: Wrap SOL → XNT (behind the scenes)
+        showStatus(`Selling ${xntAmount} XNT for USDC...`, 'info');
+        addLog(`[1/2] Wrapping ${xntAmount} SOL → XNT...`, 'info');
+        const lamports = Math.floor(xntAmount * 1e9);
+        const wrapResponse = await fetch('/api/wrap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: lamports, poolAddress: CONFIG.POOL_ADDRESS })
+        });
+        const wrapResult = await wrapResponse.json();
+        if (!wrapResult.success) throw new Error('Wrap failed: ' + wrapResult.error);
+        addLog(`✓ Wrapped ${xntAmount} SOL → ${xntAmount} XNT. TX: ${wrapResult.tx.substring(0, 20)}...`, 'success');
 
+        // Step 2: Sell XNT for USDC
+        addLog(`[2/2] Selling ${xntAmount} XNT for USDC on AMM...`, 'info');
+        const xntWithDecimals = Math.floor(xntAmount * 1e6);
         const sellResponse = await fetch('/api/sell', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: amountWithDecimals })
+            body: JSON.stringify({ amount: xntWithDecimals })
         });
-
         const sellResult = await sellResponse.json();
+        if (!sellResult.success) throw new Error('Sell failed: ' + sellResult.error);
 
-        if (!sellResult.success) {
-            throw new Error('Sell failed: ' + sellResult.error);
-        }
+        showStatus(`✅ Sold ${xntAmount} XNT for USDC! TX: ${sellResult.tx.substring(0, 20)}...`, 'success');
+        addLog(`✓ Sold XNT for USDC. TX: ${sellResult.tx.substring(0, 20)}...`, 'success');
+        await updatePrice();
+        await updateBalances();
+    } catch (error) {
+        showStatus('❌ Error: ' + error.message, 'error');
+    } finally {
+        document.getElementById('swapBtn').disabled = false;
+    }
+}
 
-        showStatus(`✅ Sold ${xntAmount}K XNT! TX: ${sellResult.tx.substring(0, 20)}...`, 'success');
+// Execute: Buy XNT with USDC (internally: buy XNT with USDC, then unwrap XNT → SOL)
+async function executeBuySOLWithUSDC() {
+    if (!wallet || !poolData) {
+        showStatus('Please wait for wallet and price data to load', 'error');
+        return;
+    }
 
-        // Step 2: Unwrap XNT to SOL (amount to unwrap)
-        showStatus(`Step 2/2: Unwrapping XNT to SOL...`, 'info');
+    const amountInput = document.getElementById('tradeAmount');
+    const usdcAmount = parseFloat(amountInput.value);
 
-        // Unwrap equivalent amount (user wants SOL back)
-        const unwrapAmount = Math.floor(xntAmount * 1e3 * 1e6); // Same amount in XNT base units
+    if (!usdcAmount || usdcAmount <= 0) {
+        showStatus('Please enter a valid amount', 'error');
+        return;
+    }
 
+    try {
+        document.getElementById('swapBtn').disabled = true;
+
+        // Step 1: Buy XNT with USDC
+        showStatus(`Buying XNT with ${usdcAmount} USDC...`, 'info');
+        addLog(`[1/2] Buying XNT with ${usdcAmount} USDC on AMM...`, 'info');
+        const usdcWithDecimals = Math.floor(usdcAmount * 1e6);
+        const buyResponse = await fetch('/api/buy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: usdcWithDecimals })
+        });
+        const buyResult = await buyResponse.json();
+        if (!buyResult.success) throw new Error('Buy failed: ' + buyResult.error);
+
+        // Calculate how much XNT we got (from the quote)
+        const k = poolData.xntReserve * poolData.usdcReserve;
+        const newUsdcReserve = poolData.usdcReserve + usdcWithDecimals;
+        const newXntReserve = k / newUsdcReserve;
+        const xntReceived = Math.floor(poolData.xntReserve - newXntReserve);
+        addLog(`✓ Bought ${(xntReceived / 1e6).toFixed(2)} XNT. TX: ${buyResult.tx.substring(0, 20)}...`, 'success');
+
+        // Step 2: Unwrap XNT → SOL (behind the scenes)
+        addLog(`[2/2] Unwrapping ${(xntReceived / 1e6).toFixed(2)} XNT → SOL...`, 'info');
         const unwrapResponse = await fetch('/api/unwrap', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                amount: unwrapAmount,
-                poolAddress: CONFIG.POOL_ADDRESS
-            })
+            body: JSON.stringify({ amount: xntReceived, poolAddress: CONFIG.POOL_ADDRESS })
         });
-
         const unwrapResult = await unwrapResponse.json();
+        if (!unwrapResult.success) throw new Error('Unwrap failed: ' + unwrapResult.error);
+        addLog(`✓ Unwrapped ${(xntReceived / 1e6).toFixed(2)} XNT → ${(xntReceived / 1e6).toFixed(2)} SOL. TX: ${unwrapResult.tx.substring(0, 20)}...`, 'success');
 
-        if (unwrapResult.success) {
-            showStatus(`✅ SELL successful! Sold XNT + Unwrapped to SOL. TX: ${unwrapResult.tx.substring(0, 20)}...`, 'success');
-            await updatePrice();
-            await updateBalances();
-        } else {
-            showStatus('❌ Unwrap failed: ' + unwrapResult.error, 'error');
-        }
+        showStatus(`✅ Bought ${(xntReceived / 1e6).toFixed(2)} XNT with ${usdcAmount} USDC! TX: ${buyResult.tx.substring(0, 20)}...`, 'success');
+        await updatePrice();
+        await updateBalances();
     } catch (error) {
         showStatus('❌ Error: ' + error.message, 'error');
     } finally {
@@ -702,6 +812,67 @@ function showStatus(message, type = 'info') {
     }, 5000);
 
     console.log('[' + type.toUpperCase() + ']', message);
+
+    // Also add to transaction log
+    addLog(message, type);
+}
+
+function addLog(message, type = 'info') {
+    const logDiv = document.getElementById('transactionLog');
+    if (!logDiv) return;
+
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = document.createElement('div');
+
+    let borderColor = '#6ab';
+    let bgColor = 'rgba(102, 170, 187, 0.05)';
+    let textColor = '#6ab';
+
+    if (type === 'error') {
+        borderColor = '#c96';
+        bgColor = 'rgba(204, 153, 102, 0.05)';
+        textColor = '#c96';
+    } else if (type === 'success') {
+        borderColor = '#6ab';
+        bgColor = 'rgba(102, 170, 187, 0.08)';
+        textColor = '#6ab';
+    } else if (type === 'info') {
+        borderColor = '#8bc';
+        bgColor = 'rgba(136, 187, 204, 0.05)';
+        textColor = '#8bc';
+    }
+
+    logEntry.style.cssText = `
+        padding: 8px;
+        margin: 5px 0;
+        border-left: 2px solid ${borderColor};
+        background: ${bgColor};
+        color: ${textColor};
+        font-size: 0.85em;
+    `;
+
+    logEntry.innerHTML = `<span style="color: #888;">[${timestamp}]</span> ${message}`;
+
+    // Add to top of log
+    if (logDiv.children.length > 0 && logDiv.children[0].textContent.includes('Transaction log will appear here')) {
+        logDiv.innerHTML = '';
+    }
+
+    logDiv.insertBefore(logEntry, logDiv.firstChild);
+
+    // Keep only last 50 entries
+    while (logDiv.children.length > 50) {
+        logDiv.removeChild(logDiv.lastChild);
+    }
+}
+
+function clearLog() {
+    const logDiv = document.getElementById('transactionLog');
+    if (!logDiv) return;
+
+    logDiv.innerHTML = `<div style="color: #8bc; padding: 10px; border-left: 2px solid #6ab; background: rgba(102, 170, 187, 0.05); margin: 5px 0;">
+        Transaction log cleared.
+    </div>`;
 }
 
 function readU64(data, offset) {
