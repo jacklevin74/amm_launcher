@@ -6,12 +6,12 @@ const { Connection, Keypair, PublicKey, Transaction, SystemProgram, LAMPORTS_PER
 // Configuration
 const CONFIG = {
     RPC_URL: 'http://localhost:8899',
-    POOL_ADDRESS: 'GoauTxG6k1YLoBh9xwJ5UWuiJtCnvRgYnovKfhjY6UAF', // Pool with 10M wSOL (XNT) and 10M virtual USDC
+    POOL_ADDRESS: 'D8S95JozUw7vYvYgvuEuP4svGYZmtMBhUXVAQftszGzn', // Pool with 10M wSOL (XNT) and 10M virtual USDC
     PROGRAM_ID: '2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF',
     TOKEN_PROGRAM_ID: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
     ASSOCIATED_TOKEN_PROGRAM_ID: 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
     XNT_MINT: 'So11111111111111111111111111111111111111112', // Native SOL mint (wSOL)
-    CEILING_RESERVE_XNT: 'Cp5AyZFLBb6r1UkJ1MjZr2YZBub65tsyZgLESsWuYuYz', // Ceiling reserve wSOL account
+    CEILING_RESERVE_XNT: 'EfrPNpQt2EBxY96a7Hhzn233Jz1pBF9KNgd3yXEq6hxp', // Ceiling reserve wSOL account
     AIRDROP_AMOUNT: 100_000 * 1e6, // 100K USDC (6 decimals)
     POLL_INTERVAL: 2000, // Update UI every 2 seconds
 };
