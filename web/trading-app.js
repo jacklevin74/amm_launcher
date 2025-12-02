@@ -255,7 +255,9 @@ async function updatePrice() {
         const xntReserve = readU64(data, 168);
         const usdcReserve = readU64(data, 176);
 
-        const price = usdcReserve / xntReserve;
+        // Calculate price with proper decimal adjustment: USDC (6 decimals) / XNT (9 decimals)
+        // price = (usdc / 1e6) / (xnt / 1e9) = (usdc * 1e9) / (xnt * 1e6) = (usdc / xnt) * 1e3
+        const price = (usdcReserve / xntReserve) * 1000;
 
         // Update UI
         document.getElementById('currentPrice').textContent = '$' + price.toFixed(6);
