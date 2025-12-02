@@ -443,8 +443,8 @@ function updateQuote() {
             const newXntReserve = poolData.xntReserve + xntAmount;
             const newUsdcReserve = k / newXntReserve;
             const usdcOut = poolData.usdcReserve - newUsdcReserve;
-            const effectivePrice = usdcOut / xntAmount;
-            const newPrice = newUsdcReserve / newXntReserve;
+            const effectivePrice = (usdcOut / xntAmount) * 1000; // Adjust for decimal difference
+            const newPrice = (newUsdcReserve / newXntReserve) * 1000; // Adjust for decimal difference
             const priceImpact = ((newPrice / poolData.price) - 1) * 100;
 
             document.getElementById('quoteReceive').textContent = (usdcOut / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -464,8 +464,8 @@ function updateQuote() {
             const newUsdcReserve2 = poolData.usdcReserve + usdcAmount;
             const newXntReserve2 = k2 / newUsdcReserve2;
             const xntOut = poolData.xntReserve - newXntReserve2;
-            const effectivePrice2 = usdcAmount / xntOut;
-            const newPrice2 = newUsdcReserve2 / newXntReserve2;
+            const effectivePrice2 = (usdcAmount / xntOut) * 1000; // Adjust for decimal difference
+            const newPrice2 = (newUsdcReserve2 / newXntReserve2) * 1000; // Adjust for decimal difference
             const priceImpact2 = ((newPrice2 / poolData.price) - 1) * 100;
 
             document.getElementById('quoteReceive').textContent = (xntOut / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
