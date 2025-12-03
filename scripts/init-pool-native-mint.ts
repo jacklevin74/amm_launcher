@@ -207,10 +207,29 @@ async function main() {
 XNT Mint (Native wSOL): ${xntMint.toString()}
 USDC Mint: ${usdcMint.toString()}
 Ceiling Reserve wSOL: ${ceilingReserveWSOL.address.toString()}
+Trader: ${traderKeypair.publicKey.toString()}
 `;
 
   fs.writeFileSync("POOL_INFO.txt", poolInfo);
   console.log("\n📝 Pool info saved to POOL_INFO.txt");
+
+  // Save config as JSON for web interfaces
+  const config = {
+    rpcUrl: "http://localhost:8899",
+    poolAddress: poolPda.toString(),
+    xntMint: xntMint.toString(),
+    usdcMint: usdcMint.toString(),
+    ceilingReserveWSOL: ceilingReserveWSOL.address.toString(),
+    ceilingReservePDA: ceilingReservePda.toString(),
+    poolXNT: pool.poolXnt.toString(),
+    poolUSDC: pool.poolUsdc.toString(),
+    authority: walletKeypair.publicKey.toString(),
+    trader: traderKeypair.publicKey.toString(),
+    programId: program.programId.toString(),
+  };
+
+  fs.writeFileSync("web/pool-config.json", JSON.stringify(config, null, 2));
+  console.log("📝 Config saved to web/pool-config.json");
 }
 
 main().catch((err) => {

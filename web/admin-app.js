@@ -1,7 +1,7 @@
 // Admin Panel Configuration
-const CONFIG = {
+let CONFIG = {
     RPC_URL: 'http://localhost:8899',
-    POOL_ADDRESS: 'FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng',
+    POOL_ADDRESS: '',  // Will be loaded from config
     API_BASE_URL: 'http://localhost:3030/api',
     POLL_INTERVAL: 3000, // Update UI every 3 seconds
 };
@@ -18,6 +18,23 @@ let poolData;
 
 async function initializeApp() {
     console.log('Initializing admin panel...');
+
+    // Load config first
+    try {
+        const configResponse = await fetch('/api/config');
+        if (!configResponse.ok) {
+            throw new Error('Failed to load config');
+        }
+        const config = await configResponse.json();
+        CONFIG.POOL_ADDRESS = config.poolAddress;
+        CONFIG.RPC_URL = config.rpcUrl;
+        console.log('✓ Loaded config:', config);
+    } catch (error) {
+        console.error('Failed to load config:', error);
+        showError('Failed to load pool config. Please run the initialization script first.');
+        return;
+    }
+
     connection = new solanaWeb3.Connection(CONFIG.RPC_URL, 'confirmed');
 
     // Load admin wallet (uses the main authority wallet)

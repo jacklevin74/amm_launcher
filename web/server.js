@@ -13,9 +13,42 @@ const url = require('url');
 const PORT = 3030;
 const API_PORT = 3031;
 
+// Load pool config
+function loadPoolConfig() {
+  try {
+    const configPath = path.join(__dirname, 'pool-config.json');
+    const configData = fs.readFileSync(configPath, 'utf8');
+    return JSON.parse(configData);
+  } catch (error) {
+    console.error('⚠️  Warning: Could not load pool config. Some endpoints may not work correctly.');
+    console.error('   Please run the initialization script: ./scripts/start-validator-and-init.sh');
+    return null;
+  }
+}
+
+const poolConfig = loadPoolConfig();
+
 // Serve static files and API endpoints
 const staticServer = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url, true);
+
+  // API endpoint to get pool config
+  if (parsedUrl.pathname === '/api/config') {
+    const configPath = path.join(__dirname, 'pool-config.json');
+    fs.readFile(configPath, 'utf8', (err, data) => {
+      if (err) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Config not found. Please run the initialization script.' }));
+        return;
+      }
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      });
+      res.end(data);
+    });
+    return;
+  }
 
   // API endpoint to get trader wallet
   if (parsedUrl.pathname === '/api/wallet') {
@@ -44,7 +77,7 @@ const fs = require('fs');
 
 (async () => {
   const connection = new anchor.web3.Connection('http://localhost:8899', 'confirmed');
-  const poolAddress = new anchor.web3.PublicKey('FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng');
+  const poolAddress = new anchor.web3.PublicKey('${poolConfig?.poolAddress || ""}');
 
   // Read pool data directly without using anchor decode
   const poolAccountInfo = await connection.getAccountInfo(poolAddress);
@@ -85,7 +118,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng';
+        const poolAddress = poolConfig?.poolAddress || "";
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/web-buy.ts ${amount} ${poolAddress}`;
 
@@ -141,7 +174,7 @@ const fs = require('fs');
   anchor.setProvider(provider);
   const program = anchor.workspace.BondingCurve;
 
-  const poolAddress = new anchor.web3.PublicKey('FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng');
+  const poolAddress = new anchor.web3.PublicKey('${poolConfig?.poolAddress || ""}');
   const pool = await program.account.pool.fetch(poolAddress);
 
   console.log(JSON.stringify({
@@ -181,7 +214,7 @@ const fs = require('fs');
   anchor.setProvider(provider);
   const program = anchor.workspace.BondingCurve;
 
-  const poolAddress = new anchor.web3.PublicKey('FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng');
+  const poolAddress = new anchor.web3.PublicKey('${poolConfig?.poolAddress || ""}');
   const pool = await program.account.pool.fetch(poolAddress);
 
   const reserveInfo = await connection.getTokenAccountBalance(pool.ceilingReserveXnt);
@@ -219,7 +252,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng';
+        const poolAddress = poolConfig?.poolAddress || "";
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
 const anchor = require('@coral-xyz/anchor');
@@ -289,7 +322,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng';
+        const poolAddress = poolConfig?.poolAddress || "";
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only -e "
 const anchor = require('@coral-xyz/anchor');
@@ -365,7 +398,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng';
+        const poolAddress = poolConfig?.poolAddress || "";
 
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/web-sell.ts ${amount} ${poolAddress}`;
 
@@ -395,7 +428,7 @@ const fs = require('fs');
     req.on('end', () => {
       try {
         const { amount } = JSON.parse(body);
-        const poolAddress = 'FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng';
+        const poolAddress = poolConfig?.poolAddress || "";
 
         // Execute withdraw_usdc instruction
         const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/withdraw-usdc.ts ${amount} ${poolAddress}`;
@@ -468,7 +501,7 @@ const fs = require('fs');
   anchor.setProvider(provider);
   const program = anchor.workspace.BondingCurve;
 
-  const poolAddress = new anchor.web3.PublicKey('FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng');
+  const poolAddress = new anchor.web3.PublicKey('${poolConfig?.poolAddress || ""}');
   const pool = await program.account.pool.fetch(poolAddress);
   const xntMint = pool.xntMint;
 
@@ -673,7 +706,7 @@ staticServer.listen(PORT, () => {
   console.log('  3. Open http://localhost:' + PORT + '/trading in your browser');
   console.log('  4. Create a wallet and start trading!');
   console.log('');
-  console.log('💡 Current Pool Address: FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng');
+  console.log('💡 Current Pool Address: ' + (poolConfig?.poolAddress || 'Not loaded'));
   console.log('');
   console.log('Press Ctrl+C to stop the server\n');
 });

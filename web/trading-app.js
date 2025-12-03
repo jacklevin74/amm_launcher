@@ -3,18 +3,35 @@
 
 const { Connection, Keypair, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } = solanaWeb3;
 
-// Configuration
-const CONFIG = {
+// Configuration - will be loaded from server
+let CONFIG = {
     RPC_URL: 'http://localhost:8899',
-    POOL_ADDRESS: 'FUMwcusvcbimeMUaQnyxDCA4wQhibxPwTFYiR9uTnYng', // Pool with 10M wSOL and 10M USDC (both 9 decimals) for 1:1 ratio
+    POOL_ADDRESS: '',  // Will be loaded from config
     PROGRAM_ID: '2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF',
     TOKEN_PROGRAM_ID: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
     ASSOCIATED_TOKEN_PROGRAM_ID: 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
     XNT_MINT: 'So11111111111111111111111111111111111111112', // Native SOL mint (wSOL)
-    CEILING_RESERVE_XNT: 'AbsTEbV4LP5YmKnwQwWceEMp8CQz5Cbdy4bgU2zAZviT', // Ceiling reserve wSOL account (fetched from pool struct)
+    CEILING_RESERVE_XNT: '', // Will be loaded from config
     AIRDROP_AMOUNT: 100_000 * 1e9, // 100K USDC (9 decimals)
     POLL_INTERVAL: 2000, // Update UI every 2 seconds
 };
+
+// Load config on page load
+(async function loadConfig() {
+    try {
+        const response = await fetch('/api/config');
+        if (!response.ok) throw new Error('Failed to load config');
+        const config = await response.json();
+        CONFIG.POOL_ADDRESS = config.poolAddress;
+        CONFIG.RPC_URL = config.rpcUrl;
+        CONFIG.PROGRAM_ID = config.programId;
+        CONFIG.CEILING_RESERVE_XNT = config.ceilingReserveWSOL;
+        console.log('✓ Loaded pool config:', config);
+    } catch (error) {
+        console.error('Failed to load config:', error);
+        alert('Failed to load pool configuration. Please run the initialization script.');
+    }
+})();
 
 // Global state
 let connection = null;
