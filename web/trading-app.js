@@ -402,7 +402,6 @@ async function updateBalances() {
         }
 
         // Update UI
-        document.getElementById('xntBalance').textContent = (xntBalance / 1e9).toLocaleString();
         document.getElementById('usdcBalance').textContent = (usdcBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
         document.getElementById('solBalance').textContent = (solBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
