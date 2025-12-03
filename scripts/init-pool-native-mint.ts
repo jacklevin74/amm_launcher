@@ -159,14 +159,14 @@ async function main() {
   const poolBeforeFunding = await program.account.pool.fetch(poolPda);
 
   // First, wrap 10M SOL for the authority
-  const wrapIx = SystemProgram.transfer({
+  const wrapReserveIx = SystemProgram.transfer({
     fromPubkey: walletKeypair.publicKey,
     toPubkey: authorityXntAccount.address,
     lamports: INITIAL_XNT,  // 10M SOL
   });
-  const syncIx = createSyncNativeInstruction(authorityXntAccount.address);
-  const wrapTx = new anchor.web3.Transaction().add(wrapIx, syncIx);
-  await provider.sendAndConfirm(wrapTx);
+  const syncReserveIx = createSyncNativeInstruction(authorityXntAccount.address);
+  const wrapReserveTx = new anchor.web3.Transaction().add(wrapReserveIx, syncReserveIx);
+  await provider.sendAndConfirm(wrapReserveTx);
 
   console.log(`✅ Wrapped 10M SOL for authority`);
 
