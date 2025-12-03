@@ -152,30 +152,38 @@ async function main() {
   const traderUsdcBalance = await getAccount(connection, traderUsdcAccount.address);
   console.log(`✅ Trader USDC Balance: ${(Number(traderUsdcBalance.amount) / 1e9).toLocaleString()} USDC`);
 
-  // Fund ceiling reserve with 10M wSOL
+  // Fund ceiling reserve with 10M wSOL using the fund_ceiling_reserve instruction
   console.log("\n🛡️ Funding ceiling reserve with 10M wSOL...");
 
-  // Create wSOL account for ceiling reserve
-  const ceilingReserveWSOL = await getOrCreateAssociatedTokenAccount(
-    connection,
-    walletKeypair,
-    NATIVE_MINT,
-    ceilingReserveXntKeypair.publicKey
-  );
+  // Fetch pool to get the ceiling reserve account address
+  const poolBeforeFunding = await program.account.pool.fetch(poolPda);
 
-  // Wrap 10M SOL for ceiling reserve
-  const wrapReserveIx = SystemProgram.transfer({
+  // First, wrap 10M SOL for the authority
+  const wrapIx = SystemProgram.transfer({
     fromPubkey: walletKeypair.publicKey,
-    toPubkey: ceilingReserveWSOL.address,
+    toPubkey: authorityXntAccount.address,
     lamports: INITIAL_XNT,  // 10M SOL
   });
-  const wrapReserveTx = new anchor.web3.Transaction().add(wrapReserveIx);
-  const syncReserveIx = createSyncNativeInstruction(ceilingReserveWSOL.address);
-  wrapReserveTx.add(syncReserveIx);
-  await provider.sendAndConfirm(wrapReserveTx);
+  const syncIx = createSyncNativeInstruction(authorityXntAccount.address);
+  const wrapTx = new anchor.web3.Transaction().add(wrapIx, syncIx);
+  await provider.sendAndConfirm(wrapTx);
 
-  const ceilingBalance = await getAccount(connection, ceilingReserveWSOL.address);
-  console.log(`✅ Ceiling Reserve: ${(Number(ceilingBalance.amount) / 1e9).toLocaleString()} wSOL (XNT)`);
+  console.log(`✅ Wrapped 10M SOL for authority`);
+
+  // Now use fund_ceiling_reserve instruction to transfer to the pool's ceiling reserve
+  await program.methods
+    .fundCeilingReserve(new anchor.BN(INITIAL_XNT_STR))
+    .accountsPartial({
+      authority: walletKeypair.publicKey,
+      pool: poolPda,
+      authorityXnt: authorityXntAccount.address,
+      ceilingReserveXnt: poolBeforeFunding.ceilingReserveXnt,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .rpc();
+
+  const ceilingBalance = await connection.getTokenAccountBalance(poolBeforeFunding.ceilingReserveXnt);
+  console.log(`✅ Ceiling Reserve: ${(Number(ceilingBalance.value.amount) / 1e9).toLocaleString()} wSOL (XNT)`);
 
   // Verify pool state
   const pool = await program.account.pool.fetch(poolPda);
@@ -187,11 +195,13 @@ async function main() {
   console.log(`\n📊 Pool Address: ${poolPda.toString()}`);
   console.log(`💰 XNT Mint (Native wSOL): ${xntMint.toString()}`);
   console.log(`💵 USDC Mint: ${usdcMint.toString()}`);
-  console.log(`🛡️ Ceiling Reserve wSOL: ${ceilingReserveWSOL.address.toString()}`);
+  console.log(`🛡️ Ceiling Reserve wSOL: ${pool.ceilingReserveXnt.toString()}`);
+  console.log(`🔑 Ceiling Reserve PDA: ${ceilingReservePda.toString()}`);
   console.log(`\n📈 Pool State:`);
   console.log(`   XNT/wSOL Reserve: ${(Number(pool.xntReserve.toString()) / 1e9).toLocaleString()} wSOL`);
   console.log(`   USDC Reserve (Virtual): ${(Number(pool.usdcReserve.toString()) / 1e9).toLocaleString()} USDC`);
   console.log(`   Price: $${priceNum.toFixed(6)}`);
+  console.log(`   Ceiling Reserve Balance: ${(Number(ceilingBalance.value.amount) / 1e9).toLocaleString()} wSOL`);
   console.log(`\n👤 Trader: ${traderKeypair.publicKey.toString()}`);
   console.log(`   SOL: ${(traderSolBalance / LAMPORTS_PER_SOL).toLocaleString()} SOL`);
   console.log(`   USDC: ${(Number(traderUsdcBalance.amount) / 1e9).toLocaleString()} USDC`);
@@ -206,7 +216,8 @@ async function main() {
   const poolInfo = `Pool: ${poolPda.toString()}
 XNT Mint (Native wSOL): ${xntMint.toString()}
 USDC Mint: ${usdcMint.toString()}
-Ceiling Reserve wSOL: ${ceilingReserveWSOL.address.toString()}
+Ceiling Reserve wSOL: ${pool.ceilingReserveXnt.toString()}
+Ceiling Reserve PDA: ${ceilingReservePda.toString()}
 Trader: ${traderKeypair.publicKey.toString()}
 `;
 
@@ -219,7 +230,7 @@ Trader: ${traderKeypair.publicKey.toString()}
     poolAddress: poolPda.toString(),
     xntMint: xntMint.toString(),
     usdcMint: usdcMint.toString(),
-    ceilingReserveWSOL: ceilingReserveWSOL.address.toString(),
+    ceilingReserveWSOL: pool.ceilingReserveXnt.toString(),
     ceilingReservePDA: ceilingReservePda.toString(),
     poolXNT: pool.poolXnt.toString(),
     poolUSDC: pool.poolUsdc.toString(),
