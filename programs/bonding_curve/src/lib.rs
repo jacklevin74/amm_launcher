@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Token, TokenAccount, Transfer, Mint};
 
 /// Bonding Curve AMM for XNT/USDC
 /// XNT uses Solana's native mint (So11111111111111111111111111111111111111112)
@@ -25,6 +25,24 @@ pub mod bonding_curve {
     ) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
 
+        // Read USDC mint decimals and validate
+        let usdc_decimals = ctx.accounts.usdc_mint.decimals;
+        require!(
+            usdc_decimals == 6 || usdc_decimals == 9,
+            ErrorCode::InvalidUsdcDecimals
+        );
+
+        msg!("USDC decimals: {}", usdc_decimals);
+
+        // Normalize virtual_usdc_amount if e6 (multiply by 1000 to get e9)
+        let virtual_usdc_normalized = if usdc_decimals == 6 {
+            virtual_usdc_amount
+                .checked_mul(1000)
+                .ok_or(ErrorCode::MathOverflow)?
+        } else {
+            virtual_usdc_amount
+        };
+
         // Transfer XNT tokens from initializer to pool (single-sided deposit)
         let cpi_accounts = Transfer {
             from: ctx.accounts.initializer_xnt.to_account_info(),
@@ -35,16 +53,17 @@ pub mod bonding_curve {
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
         token::transfer(cpi_ctx, xnt_amount)?;
 
-        // Initialize pool state with virtual USDC reserve
+        // Initialize pool state with virtual USDC reserve (normalized to e9)
         pool.authority = ctx.accounts.initializer.key();
         pool.xnt_mint = ctx.accounts.xnt_mint.key();
         pool.usdc_mint = ctx.accounts.usdc_mint.key();
         pool.pool_xnt = ctx.accounts.pool_xnt.key();
         pool.pool_usdc = ctx.accounts.pool_usdc.key();
         pool.xnt_reserve = xnt_amount;
-        pool.usdc_reserve = virtual_usdc_amount; // Virtual USDC for price bootstrapping
+        pool.usdc_reserve = virtual_usdc_normalized; // Virtual USDC for price bootstrapping (normalized to e9)
+        pool.usdc_decimals = usdc_decimals; // Store USDC decimals
         pool.k = (xnt_amount as u128)
-            .checked_mul(virtual_usdc_amount as u128)
+            .checked_mul(virtual_usdc_normalized as u128)
             .ok_or(ErrorCode::MathOverflow)?;
         pool.trade_count = 0;
         pool.total_liquidity = 0;
@@ -57,9 +76,9 @@ pub mod bonding_curve {
         pool.price_floor = price_floor;
 
         msg!("Pool initialized with {} XNT (single-sided)", xnt_amount);
-        msg!("Virtual USDC reserve: {} (for price calculation)", virtual_usdc_amount);
+        msg!("Virtual USDC reserve: {} (normalized to e9 for price calculation)", virtual_usdc_normalized);
         if xnt_amount > 0 {
-            msg!("Starting price: ${}", virtual_usdc_amount / xnt_amount);
+            msg!("Starting price: ${}", virtual_usdc_normalized / xnt_amount);
         }
         msg!("Price ceiling: ${}", price_ceiling as f64 / 1_000_000.0);
         msg!("Constant k: {}", pool.k);
@@ -73,14 +92,23 @@ pub mod bonding_curve {
     pub fn buy(ctx: Context<Buy>, usdc_amount: u64) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
 
+        // Normalize USDC input if e6 (multiply by 1000 to get e9)
+        let usdc_normalized = if pool.usdc_decimals == 6 {
+            usdc_amount
+                .checked_mul(1000)
+                .ok_or(ErrorCode::MathOverflow)?
+        } else {
+            usdc_amount
+        };
+
         // Calculate XNT output using constant product formula
         // k = x * y (constant)
-        // new_usdc_reserve = usdc_reserve + usdc_amount
+        // new_usdc_reserve = usdc_reserve + usdc_normalized
         // new_xnt_reserve = k / new_usdc_reserve
         // xnt_out = xnt_reserve - new_xnt_reserve
 
         let new_usdc_reserve = (pool.usdc_reserve as u128)
-            .checked_add(usdc_amount as u128)
+            .checked_add(usdc_normalized as u128)
             .ok_or(ErrorCode::MathOverflow)?;
 
         let new_xnt_reserve = pool.k
@@ -106,7 +134,7 @@ pub mod bonding_curve {
             .ok_or(ErrorCode::MathOverflow)?
             .checked_div(new_xnt_reserve)
             .ok_or(ErrorCode::MathOverflow)?) as u64;
-        let effective_price = usdc_amount / xnt_out;
+        let effective_price = usdc_normalized / xnt_out;
 
         msg!("Trade #{}: Buying {} XNT for {} USDC", pool.trade_count + 1, xnt_out, usdc_amount);
         msg!("Price before: {}, effective: {}, after: {}", price_before, effective_price, price_after);
@@ -237,6 +265,13 @@ pub mod bonding_curve {
 
         require!(usdc_out > 0, ErrorCode::ZeroOutput);
 
+        // Denormalize USDC output if e6 (divide by 1000 to get e6)
+        let usdc_out_transfer = if pool.usdc_decimals == 6 {
+            usdc_out / 1000
+        } else {
+            usdc_out
+        };
+
         // Calculate effective price (with proper decimal handling)
         let price_before = pool.usdc_reserve / pool.xnt_reserve;
         // Calculate price_after with 6 decimal precision: (usdc * 1e6) / xnt
@@ -247,7 +282,7 @@ pub mod bonding_curve {
             .ok_or(ErrorCode::MathOverflow)?) as u64;
         let effective_price = usdc_out / xnt_amount;
 
-        msg!("Trade #{}: Selling {} XNT for {} USDC", pool.trade_count + 1, xnt_amount, usdc_out);
+        msg!("Trade #{}: Selling {} XNT for {} USDC", pool.trade_count + 1, xnt_amount, usdc_out_transfer);
         msg!("Price before: {}, effective: {}, after: {}", price_before, effective_price, price_after);
 
         // AUTO-FLOOR DEFENSE: If price would fall below floor, remove XNT from pool and deposit to reserve
@@ -330,7 +365,7 @@ pub mod bonding_curve {
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
-        token::transfer(cpi_ctx, usdc_out)?;
+        token::transfer(cpi_ctx, usdc_out_transfer)?;
 
         // Update pool state (accounting for XNT removal if floor defense triggered)
         let final_xnt_reserve = (new_xnt_reserve as u64)
@@ -860,10 +895,10 @@ pub struct InitializePool<'info> {
     pub pool: Account<'info, Pool>,
 
     /// XNT token mint
-    pub xnt_mint: Account<'info, token::Mint>,
+    pub xnt_mint: Account<'info, Mint>,
 
-    /// USDC token mint
-    pub usdc_mint: Account<'info, token::Mint>,
+    /// USDC token mint (need to read decimals)
+    pub usdc_mint: Account<'info, Mint>,
 
     /// Pool's XNT token account
     #[account(
@@ -1217,6 +1252,7 @@ pub struct Pool {
     pub price_ceiling: u64,   // Price threshold in USDC per XNT (e.g., 2000000 for $2.00)
     pub ceiling_reserve_bump: u8, // Bump for ceiling reserve PDA
     pub price_floor: u64,     // Price floor in USDC per XNT (e.g., 1000000 for $1.00)
+    pub usdc_decimals: u8,    // USDC decimals (6 or 9), used for normalization
 }
 
 #[account]
@@ -1265,4 +1301,6 @@ pub enum ErrorCode {
     PriceBelowMinimum,
     #[msg("Trading locked: Pool has graduated (reached 50/50 balance)")]
     TradingLocked,
+    #[msg("Invalid USDC decimals: must be 6 or 9")]
+    InvalidUsdcDecimals,
 }
