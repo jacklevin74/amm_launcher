@@ -75,30 +75,14 @@ describe("E6 USDC Integration", () => {
       program.programId
     );
 
-    // Get pool token accounts
-    poolXnt = await getOrCreateAssociatedTokenAccount(
-      provider.connection,
-      payer.payer,
-      NATIVE_MINT,
-      poolPda,
-      true
-    ).then((account) => account.address);
+    // Create keypairs for token accounts
+    const poolXntKeypair = anchor.web3.Keypair.generate();
+    const poolUsdcKeypair = anchor.web3.Keypair.generate();
+    const ceilingReserveXntKeypair = anchor.web3.Keypair.generate();
 
-    poolUsdc = await getOrCreateAssociatedTokenAccount(
-      provider.connection,
-      payer.payer,
-      usdcMint,
-      poolPda,
-      true
-    ).then((account) => account.address);
-
-    ceilingReserveXnt = await getOrCreateAssociatedTokenAccount(
-      provider.connection,
-      payer.payer,
-      NATIVE_MINT,
-      ceilingReservePda,
-      true
-    ).then((account) => account.address);
+    poolXnt = poolXntKeypair.publicKey;
+    poolUsdc = poolUsdcKeypair.publicKey;
+    ceilingReserveXnt = ceilingReserveXntKeypair.publicKey;
 
     // Create trader token accounts
     traderXnt = await getOrCreateAssociatedTokenAccount(
@@ -126,29 +110,42 @@ describe("E6 USDC Integration", () => {
     );
     console.log(`✅ Minted 10M USDC (e6) to trader`);
 
+    // Wrap SOL to wSOL for initialization
+    const { Transaction: SolTransaction, SystemProgram } = await import("@solana/web3.js");
+    const { createSyncNativeInstruction: syncNative } = await import("@solana/spl-token");
+    const wrapTx = new SolTransaction().add(
+      SystemProgram.transfer({
+        fromPubkey: payer.publicKey,
+        toPubkey: traderXnt,
+        lamports: INITIAL_XNT,
+      }),
+      syncNative(traderXnt)
+    );
+    await provider.sendAndConfirm(wrapTx);
+
     // Initialize pool
     await program.methods
       .initializePool(
-        new anchor.BN(INITIAL_XNT),
-        new anchor.BN(VIRTUAL_USDC),
+        new anchor.BN(INITIAL_XNT.toString()),
+        new anchor.BN(VIRTUAL_USDC.toString()),
         true, // price_floor_enabled
         new anchor.BN(PRICE_CEILING),
         new anchor.BN(PRICE_FLOOR)
       )
       .accounts({
+        initializer: payer.publicKey,
         pool: poolPda,
         xntMint: NATIVE_MINT,
         usdcMint: usdcMint,
         poolXnt: poolXnt,
         poolUsdc: poolUsdc,
+        initializerXnt: traderXnt,
         ceilingReservePda: ceilingReservePda,
         ceilingReserveXnt: ceilingReserveXnt,
-        authority: payer.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
-        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .signers([])
+      .signers([poolXntKeypair, poolUsdcKeypair, ceilingReserveXntKeypair])
       .rpc();
 
     console.log(`✅ Pool initialized with e6 USDC`);
@@ -157,19 +154,28 @@ describe("E6 USDC Integration", () => {
     console.log(`   Initial Price: $1.00`);
 
     // Fund ceiling reserve (wrap SOL to wSOL)
+    const poolBeforeFunding = await program.account.pool.fetch(poolPda);
+
+    // Wrap more SOL for ceiling reserve funding
+    const wrapReserveTx = new SolTransaction().add(
+      SystemProgram.transfer({
+        fromPubkey: payer.publicKey,
+        toPubkey: traderXnt,
+        lamports: CEILING_RESERVE_XNT,
+      }),
+      syncNative(traderXnt)
+    );
+    await provider.sendAndConfirm(wrapReserveTx);
+
     await program.methods
-      .fundCeilingReserve(new anchor.BN(CEILING_RESERVE_XNT))
-      .accounts({
-        pool: poolPda,
-        ceilingReservePda: ceilingReservePda,
-        ceilingReserveXnt: ceilingReserveXnt,
-        xntMint: NATIVE_MINT,
+      .fundCeilingReserve(new anchor.BN(CEILING_RESERVE_XNT.toString()))
+      .accountsPartial({
         authority: payer.publicKey,
-        funder: payer.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
+        pool: poolPda,
+        authorityXnt: traderXnt,
+        ceilingReserveXnt: poolBeforeFunding.ceilingReserveXnt,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
-      .signers([])
       .rpc();
 
     console.log(`✅ Funded ceiling reserve with ${CEILING_RESERVE_XNT / 10 ** XNT_DECIMALS}M wSOL\n`);
@@ -204,17 +210,17 @@ describe("E6 USDC Integration", () => {
     const poolAfter = await program.account.pool.fetch(poolPda);
     const traderXntAccount = await getAccount(provider.connection, traderXnt);
 
-    // Calculate amounts
-    const usdcSpent = Number(poolAfter.usdcReserve) - Number(poolBefore.usdcReserve);
+    // Calculate amounts (note: USDC reserve is stored normalized to e9 internally)
+    const usdcSpentE9 = Number(poolAfter.usdcReserve) - Number(poolBefore.usdcReserve);
     const xntReceived = Number(poolBefore.xntReserve) - Number(poolAfter.xntReserve);
 
-    console.log(`USDC spent (e6): ${usdcSpent / 10 ** USDC_DECIMALS}`);
+    console.log(`USDC spent (e9 normalized): ${usdcSpentE9 / 10 ** XNT_DECIMALS}`);
     console.log(`XNT received (e9): ${xntReceived / 10 ** XNT_DECIMALS}`);
-    console.log(`Ratio: ${(xntReceived / 10 ** XNT_DECIMALS) / (usdcSpent / 10 ** USDC_DECIMALS)}`);
+    console.log(`Ratio: ${xntReceived / usdcSpentE9}`);
 
-    // Should be approximately 1:1 ratio
-    const ratio = xntReceived / usdcSpent;
-    expect(ratio).to.be.closeTo(1000, 10); // Account for decimal difference (e9/e6 = 1000) and slippage
+    // Should be approximately 1:1 ratio (both in e9)
+    const ratio = xntReceived / usdcSpentE9;
+    expect(ratio).to.be.closeTo(1.0, 0.01); // 1:1 ratio with small slippage tolerance
   });
 
   it("correctly normalizes e6 USDC to e9 internally", async () => {
@@ -222,13 +228,13 @@ describe("E6 USDC Integration", () => {
 
     const pool = await program.account.pool.fetch(poolPda);
 
-    // USDC reserve should be in e6 format
-    const usdcReserveE6 = Number(pool.usdcReserve);
-    console.log(`USDC Reserve (raw): ${usdcReserveE6}`);
-    console.log(`USDC Reserve (formatted): ${usdcReserveE6 / 10 ** USDC_DECIMALS} USDC`);
+    // USDC reserve is stored in e9 format (normalized from e6)
+    const usdcReserveE9 = Number(pool.usdcReserve);
+    console.log(`USDC Reserve (raw e9): ${usdcReserveE9}`);
+    console.log(`USDC Reserve (formatted): ${usdcReserveE9 / 10 ** XNT_DECIMALS} USDC`);
 
-    // Verify USDC decimal places
-    expect(usdcReserveE6).to.be.greaterThan(10 ** USDC_DECIMALS); // Should be in e6 range
+    // Verify USDC is in e9 range (normalized)
+    expect(usdcReserveE9).to.be.greaterThan(10 ** XNT_DECIMALS); // Should be in e9 range
   });
 
   it("validates price calculation with e6 USDC", async () => {
@@ -236,17 +242,14 @@ describe("E6 USDC Integration", () => {
 
     const pool = await program.account.pool.fetch(poolPda);
 
-    // Price = USDC / XNT (both normalized to e6 for comparison)
-    const usdcReserveE6 = Number(pool.usdcReserve);
+    // Both USDC and XNT reserves are in e9 (USDC is normalized)
+    const usdcReserveE9 = Number(pool.usdcReserve);
     const xntReserveE9 = Number(pool.xntReserve);
 
-    // Normalize XNT to e6 for price calculation
-    const xntReserveE6 = xntReserveE9 / 1000;
-
-    const price = usdcReserveE6 / xntReserveE6;
-    console.log(`USDC Reserve (e6): ${usdcReserveE6}`);
+    // Price = USDC / XNT (both in e9, so ratio is directly the price)
+    const price = usdcReserveE9 / xntReserveE9;
+    console.log(`USDC Reserve (e9): ${usdcReserveE9}`);
     console.log(`XNT Reserve (e9): ${xntReserveE9}`);
-    console.log(`XNT Reserve (normalized to e6): ${xntReserveE6}`);
     console.log(`Price: $${price.toFixed(6)}`);
 
     // Price should be close to $1.00 (with some slippage from previous test)
@@ -324,5 +327,162 @@ describe("E6 USDC Integration", () => {
     const kDiff = Math.abs(kAfter - kBefore);
     const tolerance = kBefore * 0.0001; // 0.01%
     expect(kDiff).to.be.lessThan(tolerance);
+  });
+
+  it("executes sell operation (XNT → USDC)", async () => {
+    console.log("\n📉 Test: Sell XNT for USDC\n");
+
+    const poolBefore = await program.account.pool.fetch(poolPda);
+    const xntAmount = 1_000 * 10 ** XNT_DECIMALS; // 1,000 XNT
+
+    // Sell XNT for USDC
+    await program.methods
+      .sell(new anchor.BN(xntAmount))
+      .accounts({
+        pool: poolPda,
+        poolXnt: poolXnt,
+        poolUsdc: poolUsdc,
+        ceilingReservePda: ceilingReservePda,
+        ceilingReserveXnt: ceilingReserveXnt,
+        seller: payer.publicKey,
+        sellerXnt: traderXnt,
+        sellerUsdc: traderUsdc,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([])
+      .rpc();
+
+    const poolAfter = await program.account.pool.fetch(poolPda);
+    const traderUsdcAccount = await getAccount(provider.connection, traderUsdc);
+
+    // Calculate amounts (USDC reserve is in e9 internally)
+    const usdcReceivedE9 = Number(poolBefore.usdcReserve) - Number(poolAfter.usdcReserve);
+    const xntSpent = Number(poolAfter.xntReserve) - Number(poolBefore.xntReserve);
+
+    console.log(`XNT spent (e9): ${xntSpent / 10 ** XNT_DECIMALS}`);
+    console.log(`USDC received (e9 normalized): ${usdcReceivedE9 / 10 ** XNT_DECIMALS}`);
+    console.log(`Ratio: ${usdcReceivedE9 / xntSpent}`);
+
+    // Should be approximately 1:1 ratio (both in e9)
+    const ratio = usdcReceivedE9 / xntSpent;
+    expect(ratio).to.be.closeTo(1.0, 0.01);
+
+    // XNT reserve should increase
+    expect(Number(poolAfter.xntReserve)).to.be.greaterThan(Number(poolBefore.xntReserve));
+
+    // USDC reserve should decrease
+    expect(Number(poolAfter.usdcReserve)).to.be.lessThan(Number(poolBefore.usdcReserve));
+  });
+
+  it("validates ceiling defense mechanism", async () => {
+    console.log("\n🛡️ Test: Ceiling Defense (Price > $2.00)\n");
+
+    // Buy a large amount to approach ceiling
+    const largeBuy = 5_000_000 * 10 ** USDC_DECIMALS; // 5M USDC
+
+    const poolBefore = await program.account.pool.fetch(poolPda);
+    const ceilingReserveBefore = await getAccount(provider.connection, ceilingReserveXnt);
+
+    await program.methods
+      .buy(new anchor.BN(largeBuy))
+      .accounts({
+        pool: poolPda,
+        poolXnt: poolXnt,
+        poolUsdc: poolUsdc,
+        ceilingReservePda: ceilingReservePda,
+        ceilingReserveXnt: ceilingReserveXnt,
+        xntMint: NATIVE_MINT,
+        usdcMint: usdcMint,
+        buyer: payer.publicKey,
+        buyerXnt: traderXnt,
+        buyerUsdc: traderUsdc,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([])
+      .rpc();
+
+    const poolAfter = await program.account.pool.fetch(poolPda);
+    const ceilingReserveAfter = await getAccount(provider.connection, ceilingReserveXnt);
+
+    // Calculate price (both reserves in e9)
+    const price = (Number(poolAfter.usdcReserve) * 1_000_000) / Number(poolAfter.xntReserve);
+    console.log(`Price after large buy: $${(price / 1e6).toFixed(6)}`);
+    console.log(`Ceiling: $${(PRICE_CEILING / 1e6).toFixed(6)}`);
+
+    // Price should not exceed ceiling
+    expect(price).to.be.lessThanOrEqual(PRICE_CEILING * 1.01); // Allow 1% tolerance
+
+    // If ceiling was triggered, reserve should be depleted
+    if (price > PRICE_CEILING * 0.95) {
+      console.log(`Ceiling reserve before: ${Number(ceilingReserveBefore.amount) / 1e9}`);
+      console.log(`Ceiling reserve after: ${Number(ceilingReserveAfter.amount) / 1e9}`);
+      expect(Number(ceilingReserveAfter.amount)).to.be.lessThanOrEqual(Number(ceilingReserveBefore.amount));
+    }
+  });
+
+  it("validates multiple buy and sell operations", async () => {
+    console.log("\n🔄 Test: Multiple Trades\n");
+
+    let pool = await program.account.pool.fetch(poolPda);
+    const initialPrice = (Number(pool.usdcReserve) * 1_000_000) / Number(pool.xntReserve);
+    console.log(`Initial price: $${(initialPrice / 1e6).toFixed(6)}`);
+
+    // Execute 3 buys and 3 sells
+    for (let i = 0; i < 3; i++) {
+      // Buy
+      const buyAmount = 50_000 * 10 ** USDC_DECIMALS; // 50K USDC
+      await program.methods
+        .buy(new anchor.BN(buyAmount))
+        .accounts({
+          pool: poolPda,
+          poolXnt: poolXnt,
+          poolUsdc: poolUsdc,
+          ceilingReservePda: ceilingReservePda,
+          ceilingReserveXnt: ceilingReserveXnt,
+          xntMint: NATIVE_MINT,
+          usdcMint: usdcMint,
+          buyer: payer.publicKey,
+          buyerXnt: traderXnt,
+          buyerUsdc: traderUsdc,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([])
+        .rpc();
+
+      pool = await program.account.pool.fetch(poolPda);
+      const priceAfterBuy = (Number(pool.usdcReserve) * 1_000_000) / Number(pool.xntReserve);
+      console.log(`After buy ${i + 1}: $${(priceAfterBuy / 1e6).toFixed(6)}`);
+
+      // Sell
+      const sellAmount = 30_000 * 10 ** XNT_DECIMALS; // 30K XNT
+      await program.methods
+        .sell(new anchor.BN(sellAmount))
+        .accounts({
+          pool: poolPda,
+          poolXnt: poolXnt,
+          poolUsdc: poolUsdc,
+          ceilingReservePda: ceilingReservePda,
+          ceilingReserveXnt: ceilingReserveXnt,
+          seller: payer.publicKey,
+          sellerXnt: traderXnt,
+          sellerUsdc: traderUsdc,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([])
+        .rpc();
+
+      pool = await program.account.pool.fetch(poolPda);
+      const priceAfterSell = (Number(pool.usdcReserve) * 1_000_000) / Number(pool.xntReserve);
+      console.log(`After sell ${i + 1}: $${(priceAfterSell / 1e6).toFixed(6)}`);
+    }
+
+    const finalPrice = (Number(pool.usdcReserve) * 1_000_000) / Number(pool.xntReserve);
+    console.log(`Final price: $${(finalPrice / 1e6).toFixed(6)}`);
+
+    // Price should remain within corridor
+    expect(finalPrice).to.be.lessThanOrEqual(PRICE_CEILING * 1.01);
+    expect(finalPrice).to.be.greaterThanOrEqual(PRICE_FLOOR * 0.99);
   });
 });

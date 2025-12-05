@@ -283,11 +283,12 @@ async function updatePrice() {
         document.getElementById('poolXntReserve').textContent = (xntReserve / 1e9).toLocaleString(undefined, { maximumFractionDigits: 3 });
 
         // Fetch real USDC reserves from API (only show real USDC, not virtual)
+        // IMPORTANT: Real USDC in token account is e6 (6 decimals)
         try {
             const realResponse = await fetch('http://localhost:3030/api/pool-real-reserves');
             const realData = await realResponse.json();
             if (realData && realData.realUsdc !== undefined) {
-                const realUsdc = Number(realData.realUsdc) / 1e9;
+                const realUsdc = Number(realData.realUsdc) / 1e6; // e6 USDC format
                 document.getElementById('poolRealUsdcReserve').textContent = realUsdc.toLocaleString(undefined, { maximumFractionDigits: 3 });
             } else {
                 // Fallback: show 0 if API doesn't return real USDC
@@ -402,14 +403,15 @@ async function updateBalances() {
         }
 
         // Update UI
-        document.getElementById('usdcBalance').textContent = (usdcBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        // IMPORTANT: USDC balance is e6 (6 decimals), SOL is e9 (9 decimals)
+        document.getElementById('usdcBalance').textContent = (usdcBalance / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
         document.getElementById('solBalance').textContent = (solBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         // Update position summary (only if poolData is available)
         if (poolData && poolData.price) {
             const xntValueUSDC = (xntBalance / 1e9) * poolData.price;
             const solValueUSDC = (solBalance / 1e9) * poolData.price; // 1 SOL = 1 XNT = poolData.price USDC
-            const usdcValue = usdcBalance / 1e9; // USDC is already in USDC
+            const usdcValue = usdcBalance / 1e6; // IMPORTANT: USDC is e6 (6 decimals)
             const totalPortfolio = xntValueUSDC + solValueUSDC + usdcValue;
 
             document.getElementById('xntValueUSDC').textContent = '$' + xntValueUSDC.toLocaleString();
@@ -525,7 +527,8 @@ async function executeBuy() {
         return;
     }
 
-    const amountWithDecimals = Math.floor(amount * 1e9);
+    // Convert to atomic units: USDC is e6 (6 decimals)
+    const amountWithDecimals = Math.floor(amount * 1e6);
 
     try {
         document.getElementById('swapBtn').disabled = true;
@@ -568,7 +571,7 @@ async function executeSell() {
         return;
     }
 
-    // Amount is directly in XNT (user input)
+    // Amount is in XNT (wSOL): e9 (9 decimals)
     const amountWithDecimals = Math.floor(amount * 1e9);
 
     try {
@@ -679,7 +682,8 @@ async function executeBuySOLWithUSDC() {
         // Buy XNT (wSOL) with USDC on AMM
         showStatus(`Buying wSOL with ${usdcAmount} USDC...`, 'info');
         addLog(`Buying XNT (wSOL) with ${usdcAmount} USDC on AMM...`, 'info');
-        const usdcWithDecimals = Math.floor(usdcAmount * 1e9);
+        // IMPORTANT: USDC is e6 (6 decimals), convert user input to atomic units
+        const usdcWithDecimals = Math.floor(usdcAmount * 1e6);
         const buyResponse = await fetch('/api/buy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
