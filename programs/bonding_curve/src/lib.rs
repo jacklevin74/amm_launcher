@@ -730,12 +730,22 @@ pub mod bonding_curve {
         );
         token::transfer(cpi_ctx, usdc_amount)?;
 
-        // DO NOT change virtual reserve - keep it the same to maintain price neutrality
-        // Price = usdc_reserve / xnt_reserve stays constant
-        // Only real USDC balance decreases, virtual reserve unchanged
+        // Normalize e6 USDC amount to e9 for internal reserve calculation
+        let usdc_amount_normalized = (usdc_amount as u128)
+            .checked_mul(1000)
+            .ok_or(ErrorCode::MathOverflow)? as u64;
+
+        // INCREASE virtual USDC reserve to maintain price neutrality
+        // When we withdraw real USDC, we increase virtual reserve to keep price constant
+        // Price = usdc_reserve / xnt_reserve
+        // By increasing usdc_reserve when withdrawing real USDC, the price stays the same
+        pool.usdc_reserve = pool.usdc_reserve
+            .checked_add(usdc_amount_normalized)
+            .ok_or(ErrorCode::MathOverflow)?;
 
         msg!("✅ Withdrew {} USDC (price-neutral)", usdc_amount);
-        msg!("   Virtual USDC reserve unchanged: {}", pool.usdc_reserve);
+        msg!("   Virtual USDC reserve increased by: {}", usdc_amount_normalized);
+        msg!("   New virtual USDC reserve: {}", pool.usdc_reserve);
 
         Ok(())
     }
