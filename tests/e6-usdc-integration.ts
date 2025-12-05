@@ -485,4 +485,129 @@ describe("E6 USDC Integration", () => {
     expect(finalPrice).to.be.lessThanOrEqual(PRICE_CEILING * 1.01);
     expect(finalPrice).to.be.greaterThanOrEqual(PRICE_FLOOR * 0.99);
   });
+
+  it("validates withdraw_usdc_price_neutral with e6 USDC", async () => {
+    console.log("\n💰 Testing WITHDRAW_USDC_PRICE_NEUTRAL with e6 USDC...\n");
+
+    // First, do a buy to accumulate real USDC in the pool
+    const buyAmount = 1_000_000; // 1M USDC in e6 format
+    console.log(`Step 1: Buying XNT with ${buyAmount.toLocaleString()} USDC to accumulate real USDC...`);
+
+    await program.methods
+      .buy(new anchor.BN(buyAmount))
+      .accounts({
+        buyer: payer.publicKey,
+        pool: poolPda,
+        poolXnt,
+        poolUsdc,
+        ceilingReservePda,
+        ceilingReserveXnt,
+        buyerUsdc: traderUsdc,
+        buyerXnt: traderXnt,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([])
+      .rpc();
+
+    // Check real USDC balance before withdrawal
+    const poolUsdcBefore = await connection.getTokenAccountBalance(poolUsdc);
+    const realUsdcBefore = Number(poolUsdcBefore.value.amount);
+    const poolBefore = await program.account.pool.fetch(poolPda);
+    const priceBefore = (Number(poolBefore.usdcReserve) * 1_000_000) / Number(poolBefore.xntReserve);
+
+    console.log(`Real USDC in pool before: ${(realUsdcBefore / 1e6).toLocaleString()} USDC (e6)`);
+    console.log(`Virtual USDC reserve: ${(Number(poolBefore.usdcReserve) / 1e9).toLocaleString()} USDC (e9 normalized)`);
+    console.log(`Price before: $${(priceBefore / 1e6).toFixed(6)}`);
+
+    // Withdraw 500K USDC (e6 format)
+    const withdrawAmount = 500_000; // 500K USDC in e6 atomic units
+    console.log(`\nStep 2: Withdrawing ${(withdrawAmount / 1e6).toLocaleString()} USDC (price neutral)...`);
+
+    await program.methods
+      .withdrawUsdcPriceNeutral(new anchor.BN(withdrawAmount))
+      .accounts({
+        authority: payer.publicKey,
+        pool: poolPda,
+        poolUsdc,
+        authorityUsdc: traderUsdc,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([])
+      .rpc();
+
+    // Check balances after withdrawal
+    const poolUsdcAfter = await connection.getTokenAccountBalance(poolUsdc);
+    const realUsdcAfter = Number(poolUsdcAfter.value.amount);
+    const poolAfter = await program.account.pool.fetch(poolPda);
+    const priceAfter = (Number(poolAfter.usdcReserve) * 1_000_000) / Number(poolAfter.xntReserve);
+
+    console.log(`\nReal USDC in pool after: ${(realUsdcAfter / 1e6).toLocaleString()} USDC (e6)`);
+    console.log(`Virtual USDC reserve: ${(Number(poolAfter.usdcReserve) / 1e9).toLocaleString()} USDC (e9 normalized)`);
+    console.log(`Price after: $${(priceAfter / 1e6).toFixed(6)}`);
+
+    // Assertions
+    // 1. Real USDC should decrease by withdrawal amount (e6)
+    expect(realUsdcAfter).to.equal(realUsdcBefore - withdrawAmount);
+
+    // 2. Virtual USDC reserve should DECREASE by normalized amount (e6 → e9: multiply by 1000)
+    const withdrawAmountNormalized = withdrawAmount * 1000;
+    expect(Number(poolAfter.usdcReserve)).to.equal(Number(poolBefore.usdcReserve) - withdrawAmountNormalized);
+
+    // 3. Price should remain unchanged
+    const priceDiff = Math.abs(priceAfter - priceBefore) / priceBefore;
+    expect(priceDiff).to.be.lessThan(0.0001); // Less than 0.01% change
+
+    console.log(`✅ Withdrew ${(withdrawAmount / 1e6).toLocaleString()} USDC`);
+    console.log(`✅ Real USDC decreased: ${(realUsdcBefore / 1e6).toLocaleString()} → ${(realUsdcAfter / 1e6).toLocaleString()}`);
+    console.log(`✅ Virtual reserve decreased by: ${(withdrawAmountNormalized / 1e9).toLocaleString()} USDC`);
+    console.log(`✅ Price maintained: $${(priceBefore / 1e6).toFixed(6)} → $${(priceAfter / 1e6).toFixed(6)}`);
+  });
+
+  it("validates deposit_xnt_price_neutral with e6 USDC", async () => {
+    console.log("\n💰 Testing DEPOSIT_XNT_PRICE_NEUTRAL with e6 USDC...\n");
+
+    const poolBefore = await program.account.pool.fetch(poolPda);
+    const priceBefore = (Number(poolBefore.usdcReserve) * 1_000_000) / Number(poolBefore.xntReserve);
+
+    console.log(`Before deposit:`);
+    console.log(`  XNT Reserve: ${(Number(poolBefore.xntReserve) / 1e9).toLocaleString()} XNT`);
+    console.log(`  USDC Reserve: ${(Number(poolBefore.usdcReserve) / 1e9).toLocaleString()} USDC (e9 normalized)`);
+    console.log(`  Price: $${(priceBefore / 1e6).toFixed(6)}`);
+
+    // Deposit 100K XNT (e9 format)
+    const depositAmount = 100_000 * 1e9; // 100K XNT in e9 atomic units
+    console.log(`\nDepositing ${(depositAmount / 1e9).toLocaleString()} XNT (price neutral)...`);
+
+    await program.methods
+      .depositXntPriceNeutral(new anchor.BN(depositAmount))
+      .accounts({
+        authority: payer.publicKey,
+        pool: poolPda,
+        poolXnt,
+        authorityXnt: traderXnt,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([])
+      .rpc();
+
+    const poolAfter = await program.account.pool.fetch(poolPda);
+    const priceAfter = (Number(poolAfter.usdcReserve) * 1_000_000) / Number(poolAfter.xntReserve);
+
+    console.log(`\nAfter deposit:`);
+    console.log(`  XNT Reserve: ${(Number(poolAfter.xntReserve) / 1e9).toLocaleString()} XNT`);
+    console.log(`  USDC Reserve: ${(Number(poolAfter.usdcReserve) / 1e9).toLocaleString()} USDC (e9 normalized)`);
+    console.log(`  Price: $${(priceAfter / 1e6).toFixed(6)}`);
+
+    // Assertions
+    // 1. XNT reserve should increase by deposit amount
+    expect(Number(poolAfter.xntReserve)).to.equal(Number(poolBefore.xntReserve) + depositAmount);
+
+    // 2. Price should remain approximately unchanged
+    const priceDiff = Math.abs(priceAfter - priceBefore) / priceBefore;
+    expect(priceDiff).to.be.lessThan(0.001); // Less than 0.1% change
+
+    console.log(`✅ Deposited ${(depositAmount / 1e9).toLocaleString()} XNT`);
+    console.log(`✅ XNT increased: ${(Number(poolBefore.xntReserve) / 1e9).toLocaleString()} → ${(Number(poolAfter.xntReserve) / 1e9).toLocaleString()}`);
+    console.log(`✅ Price maintained: $${(priceBefore / 1e6).toFixed(6)} → $${(priceAfter / 1e6).toFixed(6)}`);
+  });
 });

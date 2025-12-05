@@ -13,8 +13,13 @@ import {
 import { Keypair, Connection, LAMPORTS_PER_SOL, SystemProgram } from "@solana/web3.js";
 import * as fs from "fs";
 
-const VIRTUAL_USDC_STR = "10000000000000000"; // 10M virtual USDC (9 decimals) = 10,000,000 * 1e9
-const TRADER_USDC_STR = "10000000000000000";  // 10M USDC for trader (9 decimals)
+// E6 USDC (6 decimals) - standard USDC format
+const USDC_DECIMALS = 6;
+const VIRTUAL_USDC_STR = "10000000000000"; // 10M virtual USDC (6 decimals) = 10,000,000 * 1e6
+const TRADER_USDC_STR = "10000000000000";  // 10M USDC for trader (6 decimals)
+
+// E9 XNT/wSOL (9 decimals) - native SOL format
+const XNT_DECIMALS = 9;
 const INITIAL_XNT_STR = "10000000000000000";  // 10M XNT/wSOL (9 decimals) = 10,000,000 * 1e9
 const INITIAL_XNT = 10_000_000 * LAMPORTS_PER_SOL;  // 10M SOL in lamports for wrapping
 
@@ -36,8 +41,8 @@ async function main() {
   console.log("📊 Using native SOL mint for XNT (wSOL)...");
   const xntMint = NATIVE_MINT;  // So11111111111111111111111111111111111111112
 
-  console.log("📊 Creating USDC mint with 9 decimals (matching wSOL)...");
-  const usdcMint = await createMint(connection, walletKeypair, walletKeypair.publicKey, null, 9);
+  console.log(`📊 Creating USDC mint with ${USDC_DECIMALS} decimals (standard e6 USDC)...`);
+  const usdcMint = await createMint(connection, walletKeypair, walletKeypair.publicKey, null, USDC_DECIMALS);
 
   console.log(`✅ XNT Mint (Native wSOL): ${xntMint.toString()}`);
   console.log(`✅ USDC Mint: ${usdcMint.toString()}`);
@@ -150,7 +155,7 @@ async function main() {
   );
 
   const traderUsdcBalance = await getAccount(connection, traderUsdcAccount.address);
-  console.log(`✅ Trader USDC Balance: ${(Number(traderUsdcBalance.amount) / 1e9).toLocaleString()} USDC`);
+  console.log(`✅ Trader USDC Balance: ${(Number(traderUsdcBalance.amount) / Math.pow(10, USDC_DECIMALS)).toLocaleString()} USDC`);
 
   // Fund ceiling reserve with 10M wSOL using the fund_ceiling_reserve instruction
   console.log("\n🛡️ Funding ceiling reserve with 10M wSOL...");
@@ -198,13 +203,14 @@ async function main() {
   console.log(`🛡️ Ceiling Reserve wSOL: ${pool.ceilingReserveXnt.toString()}`);
   console.log(`🔑 Ceiling Reserve PDA: ${ceilingReservePda.toString()}`);
   console.log(`\n📈 Pool State:`);
-  console.log(`   XNT/wSOL Reserve: ${(Number(pool.xntReserve.toString()) / 1e9).toLocaleString()} wSOL`);
-  console.log(`   USDC Reserve (Virtual): ${(Number(pool.usdcReserve.toString()) / 1e9).toLocaleString()} USDC`);
+  console.log(`   XNT/wSOL Reserve: ${(Number(pool.xntReserve.toString()) / Math.pow(10, XNT_DECIMALS)).toLocaleString()} wSOL`);
+  console.log(`   USDC Reserve (Normalized internally to e9): ${(Number(pool.usdcReserve.toString()) / Math.pow(10, XNT_DECIMALS)).toLocaleString()} USDC`);
+  console.log(`   USDC Decimals: ${USDC_DECIMALS} (e6 - standard USDC)`);
   console.log(`   Price: $${priceNum.toFixed(6)}`);
-  console.log(`   Ceiling Reserve Balance: ${(Number(ceilingBalance.value.amount) / 1e9).toLocaleString()} wSOL`);
+  console.log(`   Ceiling Reserve Balance: ${(Number(ceilingBalance.value.amount) / Math.pow(10, XNT_DECIMALS)).toLocaleString()} wSOL`);
   console.log(`\n👤 Trader: ${traderKeypair.publicKey.toString()}`);
   console.log(`   SOL: ${(traderSolBalance / LAMPORTS_PER_SOL).toLocaleString()} SOL`);
-  console.log(`   USDC: ${(Number(traderUsdcBalance.amount) / 1e9).toLocaleString()} USDC`);
+  console.log(`   USDC: ${(Number(traderUsdcBalance.amount) / Math.pow(10, USDC_DECIMALS)).toLocaleString()} USDC`);
   console.log(`\n💡 Note: XNT is now wSOL (native wrapped SOL)`);
   console.log(`   Users can wrap/unwrap SOL ↔ wSOL using standard Solana wallets`);
   console.log(`   No custom wrap/unwrap functions needed!`);
