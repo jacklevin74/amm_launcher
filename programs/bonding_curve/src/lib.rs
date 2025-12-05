@@ -750,6 +750,52 @@ pub mod bonding_curve {
         Ok(())
     }
 
+    /// Deposit USDC to pool in a price-neutral manner
+    /// Increases real USDC balance while decreasing virtual USDC reserve
+    /// Keeps total USDC (virtual + real) constant, maintaining price
+    pub fn deposit_usdc_price_neutral(ctx: Context<DepositUsdc>, usdc_amount: u64) -> Result<()> {
+        let pool = &mut ctx.accounts.pool;
+
+        require!(
+            ctx.accounts.authority.key() == pool.authority,
+            ErrorCode::Unauthorized
+        );
+
+        msg!("Depositing {} USDC to pool (price-neutral)", usdc_amount);
+
+        // Transfer USDC from authority to pool
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.authority_usdc.to_account_info(),
+            to: ctx.accounts.pool_usdc.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            cpi_accounts,
+        );
+        token::transfer(cpi_ctx, usdc_amount)?;
+
+        // Normalize e6 USDC amount to e9 for internal reserve calculation
+        let usdc_amount_normalized = (usdc_amount as u128)
+            .checked_mul(1000)
+            .ok_or(ErrorCode::MathOverflow)? as u64;
+
+        // DECREASE virtual USDC reserve to maintain price neutrality
+        // When we deposit real USDC, we decrease virtual reserve to keep price constant
+        // Price = usdc_reserve / xnt_reserve
+        // By decreasing usdc_reserve when depositing real USDC, the price stays the same
+        // Total USDC (virtual + real) remains constant
+        pool.usdc_reserve = pool.usdc_reserve
+            .checked_sub(usdc_amount_normalized)
+            .ok_or(ErrorCode::InsufficientLiquidity)?;
+
+        msg!("✅ Deposited {} USDC (price-neutral)", usdc_amount);
+        msg!("   Virtual USDC reserve decreased by: {}", usdc_amount_normalized);
+        msg!("   New virtual USDC reserve: {}", pool.usdc_reserve);
+
+        Ok(())
+    }
+
     /// Get the maximum XNT amount that can be sold without dropping below $1.00
     /// View function - does not modify state
     pub fn get_max_sellable_xnt(ctx: Context<ViewPool>) -> Result<u64> {
@@ -1162,6 +1208,31 @@ pub struct WithdrawXnt<'info> {
 
 #[derive(Accounts)]
 pub struct WithdrawUsdc<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"pool", pool.xnt_mint.as_ref(), pool.usdc_mint.as_ref()],
+        bump = pool.bump,
+        constraint = authority.key() == pool.authority @ ErrorCode::Unauthorized
+    )]
+    pub pool: Account<'info, Pool>,
+
+    #[account(
+        mut,
+        constraint = pool_usdc.key() == pool.pool_usdc
+    )]
+    pub pool_usdc: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub authority_usdc: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct DepositUsdc<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
 
