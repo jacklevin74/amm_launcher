@@ -205,7 +205,9 @@ pub mod bonding_curve {
             let final_xnt_reserve = new_xnt_reserve
                 .checked_add(xnt_injected as u128)
                 .ok_or(ErrorCode::MathOverflow)?;
-            let final_price = new_usdc_reserve as u64 / final_xnt_reserve as u64;
+            let final_price = (new_usdc_reserve as u128)
+                .checked_div(final_xnt_reserve)
+                .ok_or(ErrorCode::MathOverflow)? as u64;
 
             msg!("✅ Price defended: ${}", final_price as f64 / 1_000_000.0);
             msg!("New XNT reserve: {}", final_xnt_reserve);
@@ -473,8 +475,12 @@ pub mod bonding_curve {
             .checked_mul(pool.usdc_reserve as u128)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        let price_before = pool.usdc_reserve / pool.xnt_reserve;
-        let price_after = pool.usdc_reserve / new_xnt_reserve;
+        let price_before = (pool.usdc_reserve as u128)
+            .checked_div(pool.xnt_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)? as u64;
+        let price_after = (pool.usdc_reserve as u128)
+            .checked_div(new_xnt_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)? as u64;
 
         msg!("Depositing {} XNT to pool", xnt_amount);
         msg!("Price decreases: {} -> {} (XNT becomes cheaper)", price_before, price_after);
@@ -524,7 +530,9 @@ pub mod bonding_curve {
             .checked_div(pool.xnt_reserve as u128)
             .ok_or(ErrorCode::MathOverflow)? as u64;
 
-        let price_before = pool.usdc_reserve / pool.xnt_reserve;
+        let price_before = (pool.usdc_reserve as u128)
+            .checked_div(pool.xnt_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)? as u64;
 
         msg!("Depositing {} XNT + {} virtual USDC (price-neutral)", xnt_amount, virtual_usdc_to_add);
         msg!("Price maintained at ${}", price_before);
@@ -556,7 +564,9 @@ pub mod bonding_curve {
         pool.usdc_reserve = new_usdc_reserve;
         pool.k = new_k;
 
-        let price_after = pool.usdc_reserve / pool.xnt_reserve;
+        let price_after = (pool.usdc_reserve as u128)
+            .checked_div(pool.xnt_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)? as u64;
         msg!("Price after: ${} (unchanged)", price_after);
 
         Ok(())
@@ -655,10 +665,17 @@ pub mod bonding_curve {
             .checked_mul(pool.usdc_reserve as u128)
             .ok_or(ErrorCode::MathOverflow)?;
 
+        let price_before_withdraw = (pool.usdc_reserve as u128)
+            .checked_div(pool.xnt_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)? as u64;
+        let price_after_withdraw = (pool.usdc_reserve as u128)
+            .checked_div(new_xnt_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)? as u64;
+
         msg!("Withdrawing {} XNT from pool", xnt_amount);
         msg!("Price increases: {} -> {}",
-            pool.usdc_reserve / pool.xnt_reserve,
-            pool.usdc_reserve / new_xnt_reserve);
+            price_before_withdraw,
+            price_after_withdraw);
 
         // Transfer XNT from pool to authority using PDA authority
         let seeds = &[
@@ -724,8 +741,12 @@ pub mod bonding_curve {
             .checked_mul(new_usdc_reserve as u128)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        let price_before = pool.usdc_reserve / pool.xnt_reserve;
-        let price_after = new_usdc_reserve / new_xnt_reserve;
+        let price_before = (pool.usdc_reserve as u128)
+            .checked_div(pool.xnt_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)? as u64;
+        let price_after = (new_usdc_reserve as u128)
+            .checked_div(new_xnt_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)? as u64;
 
         msg!("Withdrawing {} XNT + {} virtual USDC (price-neutral)", xnt_amount, virtual_usdc_to_remove);
         msg!("Price maintained at ${}", price_before);
