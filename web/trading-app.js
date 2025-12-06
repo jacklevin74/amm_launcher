@@ -204,7 +204,12 @@ async function createWallet() {
             throw new Error(result.error);
         }
 
+        console.log('Trader wallet received:', result.wallet);
+        console.log('Wallet array length:', result.wallet.length);
+        console.log('Wallet array type:', typeof result.wallet, Array.isArray(result.wallet));
+
         const secretKey = new Uint8Array(result.wallet);
+        console.log('SecretKey length:', secretKey.length);
         wallet = Keypair.fromSecretKey(secretKey);
         walletType = 'local';
 
