@@ -444,6 +444,46 @@ const fs = require('fs');
     return;
   }
 
+  // API endpoint to deposit USDC (maintains price by decreasing virtual reserve)
+  if (parsedUrl.pathname === '/api/deposit-usdc' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', () => {
+      try {
+        const { amount } = JSON.parse(body);
+        const poolAddress = poolConfig?.poolAddress || "";
+
+        // Execute deposit_usdc instruction
+        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/deposit-usdc.ts ${amount} ${poolAddress}`;
+
+        exec(cmd, (error, stdout, stderr) => {
+          if (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({ success: false, error: stderr || error.message }));
+            return;
+          }
+
+          try {
+            const result = JSON.parse(stdout.trim().split('\n').pop());
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify(result));
+          } catch (parseError) {
+            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({
+              success: false,
+              error: 'Failed to parse response',
+              details: stdout || stderr
+            }));
+          }
+        });
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ success: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   // API endpoint to withdraw USDC (maintains price by keeping virtual reserve)
   if (parsedUrl.pathname === '/api/withdraw-usdc' && req.method === 'POST') {
     let body = '';

@@ -242,6 +242,45 @@ function formatUsdcNumber(num) {
     return (num / 1e9).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
+async function depositUsdc() {
+    const amount = parseFloat(document.getElementById('depositUsdcAmount').value);
+
+    if (!amount || amount <= 0) {
+        showError('Please enter a valid amount');
+        return;
+    }
+
+    const depositBtn = document.getElementById('depositUsdcBtn');
+    depositBtn.disabled = true;
+    depositBtn.innerHTML = '<span class="loading">Processing...</span>';
+
+    clearStatus();
+
+    try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/deposit-usdc`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: amount * 1e9 }) // Convert to lamports (9 decimals)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showSuccess(`✅ Successfully deposited ${formatUsdcNumber(amount * 1e9)} USDC!<br>Virtual reserve decreased to maintain pricing.<br>TX: <span class="tx-link">${result.tx.substring(0, 20)}...</span>`);
+            document.getElementById('depositUsdcAmount').value = '';
+            await updateStats();
+        } else {
+            showError('❌ USDC deposit failed: ' + result.error);
+        }
+    } catch (error) {
+        console.error('USDC deposit error:', error);
+        showError('❌ USDC deposit failed: ' + error.message);
+    } finally {
+        depositBtn.disabled = false;
+        depositBtn.innerHTML = '&gt; DEPOSIT USDC';
+    }
+}
+
 async function withdrawUsdc() {
     const amount = parseFloat(document.getElementById('withdrawUsdcAmount').value);
 
