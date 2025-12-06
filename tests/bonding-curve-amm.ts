@@ -24,6 +24,8 @@ describe("bonding-curve-amm", () => {
   let initializerXnt: anchor.web3.PublicKey;
   let buyerXnt: anchor.web3.PublicKey;
   let buyerUsdc: anchor.web3.PublicKey;
+  let ceilingReservePda: anchor.web3.PublicKey;
+  let ceilingReserveXnt: anchor.web3.PublicKey;
 
   const INITIAL_XNT = 1_000_000_000_000; // 1M XNT (6 decimals)
   const VIRTUAL_USDC = 1_000_000_000_000; // 1M USDC (6 decimals) - virtual bootstrap
@@ -106,22 +108,35 @@ describe("bonding-curve-amm", () => {
       [Buffer.from("pool"), xntMint.toBuffer(), usdcMint.toBuffer()],
       program.programId
     );
-    console.log(`✅ Pool PDA: ${poolPda.toBase58()}\n`);
+    console.log(`✅ Pool PDA: ${poolPda.toBase58()}`);
+
+    // Derive ceiling reserve PDA
+    [ceilingReservePda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("ceiling_reserve"), poolPda.toBuffer()],
+      program.programId
+    );
+    console.log(`✅ Ceiling Reserve PDA: ${ceilingReservePda.toBase58()}\n`);
   });
 
   it("Initialize bonding curve pool", async () => {
     console.log("📊 Initializing bonding curve pool...\n");
 
-    // Generate keypairs for pool token accounts
+    // Generate keypairs for pool token accounts and ceiling reserve
     const poolXntKeypair = anchor.web3.Keypair.generate();
     const poolUsdcKeypair = anchor.web3.Keypair.generate();
+    const ceilingReserveXntKeypair = anchor.web3.Keypair.generate();
+
     poolXnt = poolXntKeypair.publicKey;
     poolUsdc = poolUsdcKeypair.publicKey;
+    ceilingReserveXnt = ceilingReserveXntKeypair.publicKey;
 
     const tx = await program.methods
       .initializePool(
         new anchor.BN(INITIAL_XNT),
-        new anchor.BN(VIRTUAL_USDC)
+        new anchor.BN(VIRTUAL_USDC),
+        false, // price floor disabled for this test
+        new anchor.BN(0), // price ceiling (not used)
+        new anchor.BN(0)  // price floor (not used)
       )
       .accounts({
         initializer: payer.publicKey,
@@ -131,10 +146,12 @@ describe("bonding-curve-amm", () => {
         poolXnt,
         poolUsdc,
         initializerXnt,
+        ceilingReservePda,
+        ceilingReserveXnt,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .signers([poolXntKeypair, poolUsdcKeypair])
+      .signers([poolXntKeypair, poolUsdcKeypair, ceilingReserveXntKeypair])
       .rpc();
 
     console.log(`✅ Pool initialized! Tx: ${tx}`);
@@ -172,10 +189,14 @@ describe("bonding-curve-amm", () => {
         .accounts({
           buyer: payer.publicKey,
           pool: poolPda,
+          xntMint: xntMint,
+          usdcMint: usdcMint,
           poolXnt,
           poolUsdc,
-          buyerUsdc,
           buyerXnt,
+          buyerUsdc,
+          ceilingReservePda,
+          ceilingReserveXnt,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();

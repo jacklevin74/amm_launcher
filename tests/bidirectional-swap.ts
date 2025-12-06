@@ -172,12 +172,14 @@ describe("Bidirectional Swap", () => {
     const tx = await program.methods
       .buy(new anchor.BN(usdcAmount))
       .accounts({
-        trader: payer.publicKey,
+        buyer: payer.publicKey,
         pool: poolPda,
+        xntMint: xntMint,
+        usdcMint: usdcMint,
         poolXnt: poolXnt,
         poolUsdc: poolUsdc,
-        traderXnt: traderXnt,
-        traderUsdc: traderUsdc,
+        buyerXnt: traderXnt,
+        buyerUsdc: traderUsdc,
         ceilingReservePda: ceilingReservePda,
         ceilingReserveXnt: ceilingReserveXnt,
         tokenProgram: TOKEN_PROGRAM_ID,
@@ -232,12 +234,14 @@ describe("Bidirectional Swap", () => {
     const tx = await program.methods
       .sell(new anchor.BN(xntAmount))
       .accounts({
-        trader: payer.publicKey,
+        seller: payer.publicKey,
         pool: poolPda,
+        xntMint: xntMint,
+        usdcMint: usdcMint,
         poolXnt: poolXnt,
         poolUsdc: poolUsdc,
-        traderXnt: traderXnt,
-        traderUsdc: traderUsdc,
+        sellerXnt: traderXnt,
+        sellerUsdc: traderUsdc,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .rpc();
@@ -282,12 +286,14 @@ describe("Bidirectional Swap", () => {
       await program.methods
         .buy(new anchor.BN(buyAmount))
         .accounts({
-          trader: payer.publicKey,
+          buyer: payer.publicKey,
           pool: poolPda,
+          xntMint: xntMint,
+          usdcMint: usdcMint,
           poolXnt: poolXnt,
           poolUsdc: poolUsdc,
-          traderXnt: traderXnt,
-          traderUsdc: traderUsdc,
+          buyerXnt: traderXnt,
+          buyerUsdc: traderUsdc,
           ceilingReservePda: ceilingReservePda,
           ceilingReserveXnt: ceilingReserveXnt,
           tokenProgram: TOKEN_PROGRAM_ID,
@@ -298,17 +304,22 @@ describe("Bidirectional Swap", () => {
       const priceAfterBuy = poolAfterBuy.usdcReserve.toNumber() / poolAfterBuy.xntReserve.toNumber();
       console.log(`   Round ${i + 1} - After BUY: $${priceAfterBuy.toFixed(6)}`);
 
+      // Add delay to respect defense cooldown (2 seconds)
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       // SELL
       const sellAmount = 30_000_000_000; // 30K XNT
       await program.methods
         .sell(new anchor.BN(sellAmount))
         .accounts({
-          trader: payer.publicKey,
+          seller: payer.publicKey,
           pool: poolPda,
+          xntMint: xntMint,
+          usdcMint: usdcMint,
           poolXnt: poolXnt,
           poolUsdc: poolUsdc,
-          traderXnt: traderXnt,
-          traderUsdc: traderUsdc,
+          sellerXnt: traderXnt,
+          sellerUsdc: traderUsdc,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
@@ -316,6 +327,9 @@ describe("Bidirectional Swap", () => {
       const poolAfterSell = await program.account.pool.fetch(poolPda);
       const priceAfterSell = poolAfterSell.usdcReserve.toNumber() / poolAfterSell.xntReserve.toNumber();
       console.log(`   Round ${i + 1} - After SELL: $${priceAfterSell.toFixed(6)}`);
+
+      // Add delay to respect defense cooldown (2 seconds)
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
     const poolFinal = await program.account.pool.fetch(poolPda);

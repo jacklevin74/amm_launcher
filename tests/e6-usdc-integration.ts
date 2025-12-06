@@ -38,9 +38,9 @@ describe("E6 USDC Integration", () => {
   const USDC_DECIMALS = 6;
   const XNT_DECIMALS = 9; // wSOL native mint
 
-  const INITIAL_XNT = 10_000_000 * 10 ** XNT_DECIMALS; // 10M XNT
-  const VIRTUAL_USDC = 10_000_000 * 10 ** USDC_DECIMALS; // 10M USDC (e6!)
-  const CEILING_RESERVE_XNT = 10_000_000 * 10 ** XNT_DECIMALS; // 10M XNT reserve
+  const INITIAL_XNT = 100_000 * 10 ** XNT_DECIMALS; // 100K XNT (reduced for validator balance)
+  const VIRTUAL_USDC = 100_000 * 10 ** USDC_DECIMALS; // 100K USDC (e6!)
+  const CEILING_RESERVE_XNT = 300_000 * 10 ** XNT_DECIMALS; // 300K XNT reserve (for ceiling defense)
   const PRICE_CEILING = 2_000_000; // $2.00 (e6 precision)
   const PRICE_FLOOR = 1_000_000; // $1.00 (e6 precision)
 
@@ -339,14 +339,16 @@ describe("E6 USDC Integration", () => {
     await program.methods
       .sell(new anchor.BN(xntAmount))
       .accounts({
+        seller: payer.publicKey,
         pool: poolPda,
+        xntMint: NATIVE_MINT,
+        usdcMint: usdcMint,
         poolXnt: poolXnt,
         poolUsdc: poolUsdc,
-        ceilingReservePda: ceilingReservePda,
-        ceilingReserveXnt: ceilingReserveXnt,
-        seller: payer.publicKey,
         sellerXnt: traderXnt,
         sellerUsdc: traderUsdc,
+        ceilingReservePda: ceilingReservePda,
+        ceilingReserveXnt: ceilingReserveXnt,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .signers([])
@@ -455,19 +457,24 @@ describe("E6 USDC Integration", () => {
       const priceAfterBuy = (Number(pool.usdcReserve) * 1_000_000) / Number(pool.xntReserve);
       console.log(`After buy ${i + 1}: $${(priceAfterBuy / 1e6).toFixed(6)}`);
 
+      // Wait 2 seconds for defense cooldown
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       // Sell
       const sellAmount = 30_000 * 10 ** XNT_DECIMALS; // 30K XNT
       await program.methods
         .sell(new anchor.BN(sellAmount))
         .accounts({
+          seller: payer.publicKey,
           pool: poolPda,
+          xntMint: NATIVE_MINT,
+          usdcMint: usdcMint,
           poolXnt: poolXnt,
           poolUsdc: poolUsdc,
-          ceilingReservePda: ceilingReservePda,
-          ceilingReserveXnt: ceilingReserveXnt,
-          seller: payer.publicKey,
           sellerXnt: traderXnt,
           sellerUsdc: traderUsdc,
+          ceilingReservePda: ceilingReservePda,
+          ceilingReserveXnt: ceilingReserveXnt,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([])
@@ -476,6 +483,9 @@ describe("E6 USDC Integration", () => {
       pool = await program.account.pool.fetch(poolPda);
       const priceAfterSell = (Number(pool.usdcReserve) * 1_000_000) / Number(pool.xntReserve);
       console.log(`After sell ${i + 1}: $${(priceAfterSell / 1e6).toFixed(6)}`);
+
+      // Wait 2 seconds for defense cooldown
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
     const finalPrice = (Number(pool.usdcReserve) * 1_000_000) / Number(pool.xntReserve);
@@ -498,19 +508,21 @@ describe("E6 USDC Integration", () => {
       .accounts({
         buyer: payer.publicKey,
         pool: poolPda,
+        xntMint: NATIVE_MINT,
+        usdcMint: usdcMint,
         poolXnt,
         poolUsdc,
+        buyerXnt: traderXnt,
+        buyerUsdc: traderUsdc,
         ceilingReservePda,
         ceilingReserveXnt,
-        buyerUsdc: traderUsdc,
-        buyerXnt: traderXnt,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .signers([])
       .rpc();
 
     // Check real USDC balance before withdrawal
-    const poolUsdcBefore = await connection.getTokenAccountBalance(poolUsdc);
+    const poolUsdcBefore = await provider.connection.getTokenAccountBalance(poolUsdc);
     const realUsdcBefore = Number(poolUsdcBefore.value.amount);
     const poolBefore = await program.account.pool.fetch(poolPda);
     const priceBefore = (Number(poolBefore.usdcReserve) * 1_000_000) / Number(poolBefore.xntReserve);
@@ -536,7 +548,7 @@ describe("E6 USDC Integration", () => {
       .rpc();
 
     // Check balances after withdrawal
-    const poolUsdcAfter = await connection.getTokenAccountBalance(poolUsdc);
+    const poolUsdcAfter = await provider.connection.getTokenAccountBalance(poolUsdc);
     const realUsdcAfter = Number(poolUsdcAfter.value.amount);
     const poolAfter = await program.account.pool.fetch(poolPda);
     const priceAfter = (Number(poolAfter.usdcReserve) * 1_000_000) / Number(poolAfter.xntReserve);
