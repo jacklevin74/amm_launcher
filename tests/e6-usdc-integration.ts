@@ -650,4 +650,199 @@ describe("E6 USDC Integration", () => {
     console.log(`✅ XNT increased: ${(Number(poolBefore.xntReserve) / 1e9).toLocaleString()} → ${(Number(poolAfter.xntReserve) / 1e9).toLocaleString()}`);
     console.log(`✅ Price maintained: $${(priceBefore / 1e6).toFixed(6)} → $${(priceAfter / 1e6).toFixed(6)}`);
   });
+
+  it("validates add_virtual_usdc increases price", async () => {
+    console.log("\n💰 Testing ADD_VIRTUAL_USDC (increase price)...\n");
+
+    const poolBefore = await program.account.pool.fetch(poolPda);
+    const xntReserveBefore = Number(poolBefore.xntReserve);
+    const usdcReserveBefore = Number(poolBefore.usdcReserve);
+    const priceBefore = (usdcReserveBefore * 1_000_000) / xntReserveBefore;
+
+    console.log("Before adding virtual USDC:");
+    console.log(`  XNT Reserve: ${(xntReserveBefore / 1e9).toLocaleString()} XNT`);
+    console.log(`  Virtual USDC Reserve: ${(usdcReserveBefore / 1e9).toLocaleString()} USDC (e9 normalized)`);
+    console.log(`  Price: $${(priceBefore / 1e6).toFixed(6)}`);
+
+    // Add 1M virtual USDC (e9 normalized)
+    const virtualUsdcToAdd = new anchor.BN(1_000_000 * 1e9);
+
+    await program.methods
+      .addVirtualUsdc(virtualUsdcToAdd)
+      .accountsPartial({
+        authority: payer.publicKey,
+        pool: poolPda,
+      })
+      .signers([])
+      .rpc();
+
+    const poolAfter = await program.account.pool.fetch(poolPda);
+    const xntReserveAfter = Number(poolAfter.xntReserve);
+    const usdcReserveAfter = Number(poolAfter.usdcReserve);
+    const priceAfter = (usdcReserveAfter * 1_000_000) / xntReserveAfter;
+
+    console.log(`\nAfter adding ${(Number(virtualUsdcToAdd) / 1e9).toLocaleString()} virtual USDC:`);
+    console.log(`  XNT Reserve: ${(xntReserveAfter / 1e9).toLocaleString()} XNT (unchanged)`);
+    console.log(`  Virtual USDC Reserve: ${(usdcReserveAfter / 1e9).toLocaleString()} USDC (+${((usdcReserveAfter - usdcReserveBefore) / 1e9).toLocaleString()})`);
+    console.log(`  Price: $${(priceAfter / 1e6).toFixed(6)} (was $${(priceBefore / 1e6).toFixed(6)})`);
+
+    // Assertions
+    // 1. XNT reserve should remain unchanged
+    expect(xntReserveAfter).to.equal(xntReserveBefore);
+
+    // 2. Virtual USDC reserve should increase by the added amount
+    expect(usdcReserveAfter).to.equal(usdcReserveBefore + Number(virtualUsdcToAdd));
+
+    // 3. Price should increase (since USDC increased, XNT stayed same)
+    expect(priceAfter).to.be.greaterThan(priceBefore);
+
+    // 4. Price increase should match the ratio
+    const expectedPriceRatio = usdcReserveAfter / usdcReserveBefore;
+    const actualPriceRatio = priceAfter / priceBefore;
+    expect(actualPriceRatio).to.be.closeTo(expectedPriceRatio, 0.000001);
+
+    console.log(`✅ Added ${(Number(virtualUsdcToAdd) / 1e9).toLocaleString()} virtual USDC`);
+    console.log(`✅ XNT unchanged: ${(xntReserveBefore / 1e9).toLocaleString()} XNT`);
+    console.log(`✅ Price increased: $${(priceBefore / 1e6).toFixed(6)} → $${(priceAfter / 1e6).toFixed(6)} (+${((priceAfter - priceBefore) / priceBefore * 100).toFixed(2)}%)`);
+  });
+
+  it("validates remove_virtual_usdc decreases price", async () => {
+    console.log("\n💰 Testing REMOVE_VIRTUAL_USDC (decrease price)...\n");
+
+    const poolBefore = await program.account.pool.fetch(poolPda);
+    const xntReserveBefore = Number(poolBefore.xntReserve);
+    const usdcReserveBefore = Number(poolBefore.usdcReserve);
+    const priceBefore = (usdcReserveBefore * 1_000_000) / xntReserveBefore;
+
+    console.log("Before removing virtual USDC:");
+    console.log(`  XNT Reserve: ${(xntReserveBefore / 1e9).toLocaleString()} XNT`);
+    console.log(`  Virtual USDC Reserve: ${(usdcReserveBefore / 1e9).toLocaleString()} USDC (e9 normalized)`);
+    console.log(`  Price: $${(priceBefore / 1e6).toFixed(6)}`);
+
+    // Remove 500K virtual USDC (e9 normalized)
+    const virtualUsdcToRemove = new anchor.BN(500_000 * 1e9);
+
+    await program.methods
+      .removeVirtualUsdc(virtualUsdcToRemove)
+      .accountsPartial({
+        authority: payer.publicKey,
+        pool: poolPda,
+      })
+      .signers([])
+      .rpc();
+
+    const poolAfter = await program.account.pool.fetch(poolPda);
+    const xntReserveAfter = Number(poolAfter.xntReserve);
+    const usdcReserveAfter = Number(poolAfter.usdcReserve);
+    const priceAfter = (usdcReserveAfter * 1_000_000) / xntReserveAfter;
+
+    console.log(`\nAfter removing ${(Number(virtualUsdcToRemove) / 1e9).toLocaleString()} virtual USDC:`);
+    console.log(`  XNT Reserve: ${(xntReserveAfter / 1e9).toLocaleString()} XNT (unchanged)`);
+    console.log(`  Virtual USDC Reserve: ${(usdcReserveAfter / 1e9).toLocaleString()} USDC (-${((usdcReserveBefore - usdcReserveAfter) / 1e9).toLocaleString()})`);
+    console.log(`  Price: $${(priceAfter / 1e6).toFixed(6)} (was $${(priceBefore / 1e6).toFixed(6)})`);
+
+    // Assertions
+    // 1. XNT reserve should remain unchanged
+    expect(xntReserveAfter).to.equal(xntReserveBefore);
+
+    // 2. Virtual USDC reserve should decrease by the removed amount
+    expect(usdcReserveAfter).to.equal(usdcReserveBefore - Number(virtualUsdcToRemove));
+
+    // 3. Price should decrease (since USDC decreased, XNT stayed same)
+    expect(priceAfter).to.be.lessThan(priceBefore);
+
+    // 4. Price decrease should match the ratio
+    const expectedPriceRatio = usdcReserveAfter / usdcReserveBefore;
+    const actualPriceRatio = priceAfter / priceBefore;
+    expect(actualPriceRatio).to.be.closeTo(expectedPriceRatio, 0.000001);
+
+    // 5. Virtual USDC should still be positive
+    expect(usdcReserveAfter).to.be.greaterThan(0);
+
+    console.log(`✅ Removed ${(Number(virtualUsdcToRemove) / 1e9).toLocaleString()} virtual USDC`);
+    console.log(`✅ XNT unchanged: ${(xntReserveBefore / 1e9).toLocaleString()} XNT`);
+    console.log(`✅ Price decreased: $${(priceBefore / 1e6).toFixed(6)} → $${(priceAfter / 1e6).toFixed(6)} (${((priceAfter - priceBefore) / priceBefore * 100).toFixed(2)}%)`);
+  });
+
+  it("validates k-invariant is updated after virtual USDC adjustment", async () => {
+    console.log("\n📐 Testing K-invariant after virtual USDC adjustment...\n");
+
+    const poolBefore = await program.account.pool.fetch(poolPda);
+    const kBefore = Number(poolBefore.k);
+
+    // Add some virtual USDC
+    const virtualUsdcToAdd = new anchor.BN(100_000 * 1e9);
+
+    await program.methods
+      .addVirtualUsdc(virtualUsdcToAdd)
+      .accountsPartial({
+        authority: payer.publicKey,
+        pool: poolPda,
+      })
+      .signers([])
+      .rpc();
+
+    const poolAfter = await program.account.pool.fetch(poolPda);
+    const kAfter = Number(poolAfter.k);
+
+    // Calculate expected k = xnt_reserve * usdc_reserve
+    const expectedK = Number(poolAfter.xntReserve) * Number(poolAfter.usdcReserve);
+
+    console.log(`K before: ${kBefore}`);
+    console.log(`K after: ${kAfter}`);
+    console.log(`Expected K: ${expectedK}`);
+    console.log(`K increased: ${((kAfter - kBefore) / kBefore * 100).toFixed(2)}%`);
+
+    // Assertions
+    // 1. K should have increased (since USDC increased)
+    expect(kAfter).to.be.greaterThan(kBefore);
+
+    // 2. K should match the calculated value
+    expect(kAfter).to.equal(expectedK);
+
+    console.log(`✅ K-invariant properly updated after virtual USDC adjustment`);
+  });
+
+  it("rejects unauthorized attempts to adjust virtual USDC", async () => {
+    console.log("\n🔒 Testing authorization for virtual USDC adjustment...\n");
+
+    // Create unauthorized signer
+    const unauthorizedUser = anchor.web3.Keypair.generate();
+
+    // Try to add virtual USDC with unauthorized user
+    try {
+      await program.methods
+        .addVirtualUsdc(new anchor.BN(1000 * 1e9))
+        .accountsPartial({
+          authority: unauthorizedUser.publicKey,
+          pool: poolPda,
+        })
+        .signers([unauthorizedUser])
+        .rpc();
+
+      // Should not reach here
+      throw new Error("Should have rejected unauthorized user");
+    } catch (error) {
+      console.log(`✅ Correctly rejected unauthorized add_virtual_usdc: ${error.message}`);
+      expect(error.message).to.include("Unauthorized");
+    }
+
+    // Try to remove virtual USDC with unauthorized user
+    try {
+      await program.methods
+        .removeVirtualUsdc(new anchor.BN(1000 * 1e9))
+        .accountsPartial({
+          authority: unauthorizedUser.publicKey,
+          pool: poolPda,
+        })
+        .signers([unauthorizedUser])
+        .rpc();
+
+      // Should not reach here
+      throw new Error("Should have rejected unauthorized user");
+    } catch (error) {
+      console.log(`✅ Correctly rejected unauthorized remove_virtual_usdc: ${error.message}`);
+      expect(error.message).to.include("Unauthorized");
+    }
+  });
 });
