@@ -242,6 +242,8 @@ describe("Bidirectional Swap", () => {
         poolUsdc: poolUsdc,
         sellerXnt: traderXnt,
         sellerUsdc: traderUsdc,
+        ceilingReservePda: ceilingReservePda,
+        ceilingReserveXnt: ceilingReserveXnt,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .rpc();
@@ -304,9 +306,6 @@ describe("Bidirectional Swap", () => {
       const priceAfterBuy = poolAfterBuy.usdcReserve.toNumber() / poolAfterBuy.xntReserve.toNumber();
       console.log(`   Round ${i + 1} - After BUY: $${priceAfterBuy.toFixed(6)}`);
 
-      // Add delay to respect defense cooldown (2 seconds)
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
       // SELL
       const sellAmount = 30_000_000_000; // 30K XNT
       await program.methods
@@ -320,6 +319,8 @@ describe("Bidirectional Swap", () => {
           poolUsdc: poolUsdc,
           sellerXnt: traderXnt,
           sellerUsdc: traderUsdc,
+          ceilingReservePda: ceilingReservePda,
+          ceilingReserveXnt: ceilingReserveXnt,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
