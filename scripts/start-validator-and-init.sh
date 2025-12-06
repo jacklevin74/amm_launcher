@@ -57,6 +57,17 @@ anchor deploy --provider.cluster http://localhost:8899
 echo -e "${YELLOW}🎯 Running pool initialization...${NC}"
 ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node scripts/init-pool-native-mint.ts
 
+echo -e "${YELLOW}🔄 Restarting web server...${NC}"
+pkill -f "node server.js" 2>/dev/null || true
+sleep 1
+cd web && node server.js > /tmp/server.log 2>&1 &
+SERVER_PID=$!
+cd ..
+echo -e "${GREEN}✅ Web server started (PID: ${SERVER_PID})${NC}"
+echo -e "${GREEN}🌐 Visit: http://localhost:3030/trading${NC}"
+
 echo -e "${GREEN}🎉 Complete! Validator is running in background (PID: ${VALIDATOR_PID})${NC}"
 echo -e "${YELLOW}📝 To stop validator: pkill solana-test-validator${NC}"
-echo -e "${YELLOW}📊 View logs: tail -f /tmp/validator.log${NC}"
+echo -e "${YELLOW}📝 To stop server: pkill -f 'node server.js'${NC}"
+echo -e "${YELLOW}📊 View validator logs: tail -f /tmp/validator.log${NC}"
+echo -e "${YELLOW}📊 View server logs: tail -f /tmp/server.log${NC}"
