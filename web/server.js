@@ -524,6 +524,86 @@ const fs = require('fs');
     return;
   }
 
+  // API endpoint to add virtual USDC (increases price)
+  if (parsedUrl.pathname === '/api/add-virtual-usdc' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', () => {
+      try {
+        const { amount } = JSON.parse(body);
+        const poolAddress = poolConfig?.poolAddress || "";
+
+        // Execute add_virtual_usdc instruction
+        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/add-virtual-usdc.ts ${amount} ${poolAddress}`;
+
+        exec(cmd, (error, stdout, stderr) => {
+          if (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({ success: false, error: stderr || error.message }));
+            return;
+          }
+
+          try {
+            const result = JSON.parse(stdout.trim().split('\n').pop());
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify(result));
+          } catch (parseError) {
+            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({
+              success: false,
+              error: 'Failed to parse response',
+              details: stdout || stderr
+            }));
+          }
+        });
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ success: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // API endpoint to remove virtual USDC (decreases price)
+  if (parsedUrl.pathname === '/api/remove-virtual-usdc' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', () => {
+      try {
+        const { amount } = JSON.parse(body);
+        const poolAddress = poolConfig?.poolAddress || "";
+
+        // Execute remove_virtual_usdc instruction
+        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/remove-virtual-usdc.ts ${amount} ${poolAddress}`;
+
+        exec(cmd, (error, stdout, stderr) => {
+          if (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({ success: false, error: stderr || error.message }));
+            return;
+          }
+
+          try {
+            const result = JSON.parse(stdout.trim().split('\n').pop());
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify(result));
+          } catch (parseError) {
+            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({
+              success: false,
+              error: 'Failed to parse response',
+              details: stdout || stderr
+            }));
+          }
+        });
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ success: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   // API endpoint to get trader wallet address
   if (parsedUrl.pathname === '/api/trader-wallet') {
     const cmd = `cd /Users/yakovlevin/dev/lottery_amm && node -e "const fs = require('fs'); const data = JSON.parse(fs.readFileSync('/tmp/trader-wallet.json', 'utf8')); const { Keypair } = require('@solana/web3.js'); const kp = Keypair.fromSecretKey(new Uint8Array(data)); console.log(JSON.stringify({ success: true, address: kp.publicKey.toString() }));"`;

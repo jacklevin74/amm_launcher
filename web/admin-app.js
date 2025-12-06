@@ -319,3 +319,81 @@ async function withdrawUsdc() {
         withdrawBtn.innerHTML = '&gt; WITHDRAW USDC';
     }
 }
+
+async function addVirtualUsdc() {
+    const amount = parseFloat(document.getElementById('addVirtualUsdcAmount').value);
+
+    if (!amount || amount <= 0) {
+        showError('Please enter a valid amount');
+        return;
+    }
+
+    const addBtn = document.getElementById('addVirtualUsdcBtn');
+    addBtn.disabled = true;
+    addBtn.innerHTML = '<span class="loading">Processing...</span>';
+
+    clearStatus();
+
+    try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/add-virtual-usdc`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: amount * 1e9 }) // Convert to lamports (9 decimals)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showSuccess(`✅ Successfully added ${formatUsdcNumber(amount * 1e9)} virtual USDC!<br>⬆️ Price increased by ${result.priceChange}<br>TX: <span class="tx-link">${result.tx.substring(0, 20)}...</span>`);
+            document.getElementById('addVirtualUsdcAmount').value = '';
+            await updateStats();
+        } else {
+            showError('❌ Add virtual USDC failed: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Add virtual USDC error:', error);
+        showError('❌ Add virtual USDC failed: ' + error.message);
+    } finally {
+        addBtn.disabled = false;
+        addBtn.innerHTML = '&gt; ADD VIRTUAL USDC';
+    }
+}
+
+async function removeVirtualUsdc() {
+    const amount = parseFloat(document.getElementById('removeVirtualUsdcAmount').value);
+
+    if (!amount || amount <= 0) {
+        showError('Please enter a valid amount');
+        return;
+    }
+
+    const removeBtn = document.getElementById('removeVirtualUsdcBtn');
+    removeBtn.disabled = true;
+    removeBtn.innerHTML = '<span class="loading">Processing...</span>';
+
+    clearStatus();
+
+    try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/remove-virtual-usdc`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: amount * 1e9 }) // Convert to lamports (9 decimals)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showSuccess(`✅ Successfully removed ${formatUsdcNumber(amount * 1e9)} virtual USDC!<br>⬇️ Price decreased by ${result.priceChange}<br>TX: <span class="tx-link">${result.tx.substring(0, 20)}...</span>`);
+            document.getElementById('removeVirtualUsdcAmount').value = '';
+            await updateStats();
+        } else {
+            showError('❌ Remove virtual USDC failed: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Remove virtual USDC error:', error);
+        showError('❌ Remove virtual USDC failed: ' + error.message);
+    } finally {
+        removeBtn.disabled = false;
+        removeBtn.innerHTML = '&gt; REMOVE VIRTUAL USDC';
+    }
+}

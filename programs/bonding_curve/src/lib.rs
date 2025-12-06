@@ -989,6 +989,109 @@ pub mod bonding_curve {
         Ok(())
     }
 
+    /// Add virtual USDC to increase price (authority only)
+    /// Increases virtual USDC reserve while keeping XNT reserve constant
+    /// This INCREASES the price: Price = USDC / XNT
+    pub fn add_virtual_usdc(ctx: Context<AdjustVirtualUsdc>, usdc_amount: u64) -> Result<()> {
+        let pool = &mut ctx.accounts.pool;
+
+        require!(
+            ctx.accounts.authority.key() == pool.authority,
+            ErrorCode::Unauthorized
+        );
+
+        let price_before = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
+
+        // Add to virtual USDC reserve (increases price)
+        pool.usdc_reserve = pool.usdc_reserve
+            .checked_add(usdc_amount)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        // Update k invariant
+        pool.k = (pool.xnt_reserve as u128)
+            .checked_mul(pool.usdc_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        let price_after = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
+
+        msg!("Added {} virtual USDC (e9)", usdc_amount);
+        msg!("Price increased: ${} → ${}", price_before as f64 / 1_000_000.0, price_after as f64 / 1_000_000.0);
+
+        // Validate invariants
+        let calculated_k = (pool.xnt_reserve as u128)
+            .checked_mul(pool.usdc_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(pool.k == calculated_k, ErrorCode::InvalidState);
+        require!(pool.xnt_reserve > 0 && pool.usdc_reserve > 0, ErrorCode::InvalidState);
+
+        Ok(())
+    }
+
+    /// Remove virtual USDC to decrease price (authority only)
+    /// Decreases virtual USDC reserve while keeping XNT reserve constant
+    /// This DECREASES the price: Price = USDC / XNT
+    pub fn remove_virtual_usdc(ctx: Context<AdjustVirtualUsdc>, usdc_amount: u64) -> Result<()> {
+        let pool = &mut ctx.accounts.pool;
+
+        require!(
+            ctx.accounts.authority.key() == pool.authority,
+            ErrorCode::Unauthorized
+        );
+
+        let price_before = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
+
+        // Remove from virtual USDC reserve (decreases price)
+        pool.usdc_reserve = pool.usdc_reserve
+            .checked_sub(usdc_amount)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        // Ensure reserve doesn't go to zero
+        require!(pool.usdc_reserve > 0, ErrorCode::InsufficientLiquidity);
+
+        // Update k invariant
+        pool.k = (pool.xnt_reserve as u128)
+            .checked_mul(pool.usdc_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        let price_after = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
+
+        msg!("Removed {} virtual USDC (e9)", usdc_amount);
+        msg!("Price decreased: ${} → ${}", price_before as f64 / 1_000_000.0, price_after as f64 / 1_000_000.0);
+
+        // Validate invariants
+        let calculated_k = (pool.xnt_reserve as u128)
+            .checked_mul(pool.usdc_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(pool.k == calculated_k, ErrorCode::InvalidState);
+        require!(pool.xnt_reserve > 0 && pool.usdc_reserve > 0, ErrorCode::InvalidState);
+
+        Ok(())
+    }
+
     /// Get the maximum XNT amount that can be sold without dropping below $1.00
     /// View function - does not modify state
     pub fn get_max_sellable_xnt(ctx: Context<ViewPool>) -> Result<u64> {
@@ -1463,6 +1566,20 @@ pub struct DepositUsdc<'info> {
     pub authority_usdc: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct AdjustVirtualUsdc<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"pool", pool.xnt_mint.as_ref(), pool.usdc_mint.as_ref()],
+        bump = pool.bump,
+        constraint = authority.key() == pool.authority @ ErrorCode::Unauthorized
+    )]
+    pub pool: Account<'info, Pool>,
 }
 
 #[derive(Accounts)]
