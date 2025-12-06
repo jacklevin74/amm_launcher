@@ -191,32 +191,33 @@ async function disconnectWallet() {
 // Create new wallet (local keypair)
 async function createWallet() {
     try {
-        showStatus('Generating local wallet...', 'info');
+        showStatus('Loading trader wallet from server...', 'info');
 
-        wallet = Keypair.generate();
+        // Load the existing trader wallet from server (same one backend uses)
+        const response = await fetch('/api/trader-wallet');
+        if (!response.ok) {
+            throw new Error('Failed to load trader wallet. Please initialize the pool first.');
+        }
+
+        const result = await response.json();
+        if (!result.success) {
+            throw new Error(result.error);
+        }
+
+        const secretKey = new Uint8Array(result.wallet);
+        wallet = Keypair.fromSecretKey(secretKey);
         walletType = 'local';
 
         // Save to localStorage
-        localStorage.setItem('trader_wallet', JSON.stringify(Array.from(wallet.secretKey)));
+        localStorage.setItem('trader_wallet', JSON.stringify(result.wallet));
         localStorage.setItem('walletType', 'local');
 
-        // Request SOL airdrop for transaction fees
-        showStatus('Requesting SOL airdrop for gas fees...', 'info');
-        const airdropSignature = await connection.requestAirdrop(
-            wallet.publicKey,
-            2 * LAMPORTS_PER_SOL
-        );
-        await connection.confirmTransaction(airdropSignature);
-
-        // Airdrop 1000 SOL for testing
-        await airdropSOL();
-
-        showStatus('Local wallet created successfully!', 'success');
+        showStatus('Trader wallet loaded successfully!', 'success');
         updateWalletUI();
         await updateBalances();
 
     } catch (error) {
-        showStatus('Error creating wallet: ' + error.message, 'error');
+        showStatus('Error loading wallet: ' + error.message, 'error');
     }
 }
 
@@ -589,8 +590,13 @@ async function updateBalances() {
 
         // Update UI
         // IMPORTANT: USDC balance is e6 (6 decimals), SOL/XNT is e9 (9 decimals)
-        document.getElementById('usdcBalance').textContent = (usdcBalance / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('solBalance').textContent = (solBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const usdcDisplayValue = (usdcBalance / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const solDisplayValue = (solBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        console.log('updateBalances: Updating UI - SOL:', solDisplayValue, 'USDC:', usdcDisplayValue);
+
+        document.getElementById('usdcBalance').textContent = usdcDisplayValue;
+        document.getElementById('solBalance').textContent = solDisplayValue;
 
         // Update position summary (only if poolData is available)
         if (poolData && poolData.price) {

@@ -32,6 +32,27 @@ const poolConfig = loadPoolConfig();
 const staticServer = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url, true);
 
+  // API endpoint to get trader wallet (for local wallet mode)
+  if (parsedUrl.pathname === '/api/trader-wallet' && req.method === 'GET') {
+    const traderWalletPath = '/tmp/trader-wallet.json';
+    fs.readFile(traderWalletPath, 'utf8', (err, data) => {
+      if (err) {
+        res.writeHead(404, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.end(JSON.stringify({ success: false, error: 'Trader wallet not found. Please initialize the pool first.' }));
+        return;
+      }
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      });
+      res.end(JSON.stringify({ success: true, wallet: JSON.parse(data) }));
+    });
+    return;
+  }
+
   // API endpoint to get pool config
   if (parsedUrl.pathname === '/api/config') {
     const configPath = path.join(__dirname, 'pool-config.json');
