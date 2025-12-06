@@ -588,16 +588,15 @@ async function updateBalances() {
         }
 
         // Update UI
-        // IMPORTANT: USDC balance is e6 (6 decimals), SOL is e9 (9 decimals)
+        // IMPORTANT: USDC balance is e6 (6 decimals), XNT (wSOL) is e9 (9 decimals)
         document.getElementById('usdcBalance').textContent = (usdcBalance / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('solBalance').textContent = (solBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('solBalance').textContent = (xntBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         // Update position summary (only if poolData is available)
         if (poolData && poolData.price) {
             const xntValueUSDC = (xntBalance / 1e9) * poolData.price;
-            const solValueUSDC = (solBalance / 1e9) * poolData.price; // 1 SOL = 1 XNT = poolData.price USDC
             const usdcValue = usdcBalance / 1e6; // IMPORTANT: USDC is e6 (6 decimals)
-            const totalPortfolio = xntValueUSDC + solValueUSDC + usdcValue;
+            const totalPortfolio = xntValueUSDC + usdcValue;
 
             document.getElementById('xntValueUSDC').textContent = '$' + xntValueUSDC.toLocaleString();
             document.getElementById('totalPortfolio').textContent = '$' + totalPortfolio.toLocaleString();
@@ -1191,8 +1190,28 @@ function readU64(data, offset) {
     return high * 0x100000000 + low;
 }
 
+// Initialize mobile view on load and resize
+function initMobileView() {
+    const walletPanel = document.querySelector('.panel-wallet');
+    if (walletPanel) {
+        if (window.innerWidth <= 768) {
+            // On mobile, keep collapsed
+            walletPanel.classList.add('collapsed');
+        } else {
+            // On desktop, remove collapsed
+            walletPanel.classList.remove('collapsed');
+        }
+    }
+}
+
 // Initialize on load
-window.addEventListener('load', init);
+window.addEventListener('load', () => {
+    init();
+    initMobileView();
+});
+
+// Handle window resize
+window.addEventListener('resize', initMobileView);
 
 // Toggle ceiling reserve section
 function toggleCeilingReserve() {
@@ -1210,8 +1229,20 @@ function toggleCeilingReserve() {
     }
 }
 
+// Toggle wallet panel on mobile (only works on mobile viewport)
+function toggleWalletPanelMobile() {
+    // Only toggle on mobile (viewport width <= 768px)
+    if (window.innerWidth <= 768) {
+        const panel = document.querySelector('.panel-wallet');
+        if (panel) {
+            panel.classList.toggle('collapsed');
+        }
+    }
+}
+
 // Expose functions to global scope
 window.toggleCeilingReserve = toggleCeilingReserve;
+window.toggleWalletPanelMobile = toggleWalletPanelMobile;
 window.openWalletModal = openWalletModal;
 window.closeWalletModal = closeWalletModal;
 window.closeWalletModalOnOverlay = closeWalletModalOnOverlay;

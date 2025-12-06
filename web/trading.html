@@ -733,6 +733,242 @@
             color: #5b9eff;
             font-weight: 500;
         }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                font-size: 11px;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 8px;
+                padding: 10px 12px;
+                align-items: flex-start;
+                background: rgba(0, 0, 0, 0.3);
+                border-bottom: 1px solid rgba(91, 158, 255, 0.1);
+            }
+
+            .header-title h1 {
+                font-size: 13px;
+                margin-bottom: 2px;
+            }
+
+            .header-title p {
+                font-size: 9px;
+                opacity: 0.8;
+            }
+
+            #walletButtonContainer {
+                width: 100%;
+            }
+
+            .wallet-connect-btn {
+                width: 100%;
+                justify-content: center;
+                padding: 5px 10px;
+                font-size: 10px;
+                background: rgba(91, 158, 255, 0.03);
+                border: 1px solid rgba(91, 158, 255, 0.1);
+            }
+
+            .wallet-connect-btn:hover {
+                background: rgba(91, 158, 255, 0.06);
+            }
+
+            .wallet-connected {
+                width: 100%;
+                justify-content: space-between;
+                padding: 4px 8px;
+                background: rgba(91, 158, 255, 0.02);
+                border: 1px solid rgba(91, 158, 255, 0.08);
+                gap: 6px;
+            }
+
+            .wallet-connected .wallet-info {
+                gap: 5px;
+                font-size: 9px;
+            }
+
+            .wallet-connected .wallet-type-label {
+                font-size: 9px;
+            }
+
+            .wallet-connected .wallet-address {
+                font-size: 9px;
+                max-width: 100px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .wallet-connected .wallet-separator {
+                font-size: 8px;
+            }
+
+            .wallet-disconnect-btn {
+                padding: 3px 7px;
+                font-size: 9px;
+                border: 1px solid rgba(139, 146, 168, 0.15);
+            }
+
+            .wallet-disconnect-btn:hover {
+                background: rgba(255, 107, 107, 0.06);
+                border-color: rgba(255, 107, 107, 0.25);
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            /* Reorder panels: Market & Trading first, Wallet & Position second */
+            .panel-wallet {
+                order: 2;
+            }
+
+            .panel-market {
+                order: 1;
+            }
+
+            /* Make wallet section collapsible on mobile */
+            .panel-wallet h2 {
+                cursor: pointer;
+                user-select: none;
+                position: relative;
+                padding-right: 20px;
+            }
+
+            .panel-wallet h2::after {
+                content: '▼';
+                position: absolute;
+                right: 0;
+                font-size: 10px;
+                transition: transform 0.2s ease;
+            }
+
+            .panel-wallet.collapsed h2::after {
+                transform: rotate(-90deg);
+            }
+
+            .panel-wallet.collapsed .wallet-section {
+                display: none;
+            }
+
+            .panel-wallet.collapsed #statusMessages {
+                display: none;
+            }
+
+            .panel {
+                padding: 15px;
+            }
+
+            .panel h2 {
+                font-size: 1.1em;
+                margin-bottom: 12px;
+                padding-bottom: 8px;
+            }
+
+            .balance-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .balance-item {
+                padding: 12px;
+            }
+
+            .balance-item .label {
+                font-size: 0.85em;
+            }
+
+            .balance-item .amount {
+                font-size: 1.3em;
+            }
+
+            .price-display {
+                padding: 15px;
+            }
+
+            .price-display .current-price {
+                font-size: 2em;
+            }
+
+            .token-input-card {
+                padding: 12px;
+            }
+
+            .token-amount-input,
+            .token-amount-display {
+                font-size: 1.5em;
+            }
+
+            .quick-amounts {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .btn-group {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            button {
+                padding: 12px 20px;
+                font-size: 1em;
+            }
+
+            .position-summary {
+                padding: 12px;
+            }
+
+            .modal {
+                width: 95%;
+                max-width: 95%;
+            }
+
+            .collapsible-header {
+                padding: 10px;
+            }
+
+            .collapsible-title {
+                font-size: 11px;
+            }
+
+            /* Transaction log on mobile */
+            #transactionLog {
+                max-height: 200px !important;
+                font-size: 0.8em;
+            }
+
+            .trade-details-inline {
+                font-size: 0.85em;
+            }
+
+            .detail-row {
+                font-size: 0.85em;
+            }
+        }
+
+        /* Extra small devices */
+        @media (max-width: 480px) {
+            body {
+                font-size: 10px;
+            }
+
+            .header-title h1 {
+                font-size: 13px;
+            }
+
+            .price-display .current-price {
+                font-size: 1.8em;
+            }
+
+            .token-amount-input,
+            .token-amount-display {
+                font-size: 1.3em;
+            }
+        }
     </style>
 </head>
 <body>
@@ -795,8 +1031,8 @@
 
         <div class="grid">
             <!-- Left Column: Wallet & Position -->
-            <div class="panel">
-                <h2>WALLET & POSITION</h2>
+            <div class="panel panel-wallet">
+                <h2 onclick="toggleWalletPanelMobile()">WALLET & POSITION</h2>
 
                 <div class="wallet-section" id="walletSection">
                     <div id="noWallet">
@@ -878,7 +1114,7 @@
             </div>
 
             <!-- Right Column: Market Data & Trading -->
-            <div class="panel">
+            <div class="panel panel-market">
                 <h2>MARKET & TRADING</h2>
 
                 <div class="price-display">
