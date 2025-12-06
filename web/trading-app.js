@@ -634,6 +634,43 @@ async function updateBalances() {
     }
 }
 
+// Optimistically update balances in UI (before transaction confirms)
+function updateBalancesOptimistic(solChange, usdcChange) {
+    try {
+        // Get current displayed balances
+        const currentSolText = document.getElementById('solBalance').textContent;
+        const currentUsdcText = document.getElementById('usdcBalance').textContent;
+
+        // Parse current values (remove commas)
+        const currentSol = parseFloat(currentSolText.replace(/,/g, '')) || 0;
+        const currentUsdc = parseFloat(currentUsdcText.replace(/,/g, '')) || 0;
+
+        // Calculate new balances
+        const newSol = currentSol + solChange;
+        const newUsdc = currentUsdc + usdcChange;
+
+        // Update UI immediately
+        const solDisplayValue = newSol.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const usdcDisplayValue = newUsdc.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        console.log('Optimistic update - SOL:', solDisplayValue, 'USDC:', usdcDisplayValue);
+
+        document.getElementById('solBalance').textContent = solDisplayValue;
+        document.getElementById('usdcBalance').textContent = usdcDisplayValue;
+
+        // Update position summary if poolData is available
+        if (poolData && poolData.price) {
+            const solValueUSDC = newSol * poolData.price;
+            const totalPortfolio = solValueUSDC + newUsdc;
+
+            document.getElementById('xntValueUSDC').textContent = '$' + solValueUSDC.toLocaleString();
+            document.getElementById('totalPortfolio').textContent = '$' + totalPortfolio.toLocaleString();
+        }
+    } catch (error) {
+        console.error('Error in optimistic update:', error);
+    }
+}
+
 // Update quote
 function updateQuote() {
     const amountInput = document.getElementById('tradeAmount');
@@ -880,6 +917,10 @@ async function executeSellSOLForUSDC() {
         const minUsdcOutWithDecimals = Math.floor(minUsdcOut * 1e6);
         const xntWithDecimals = Math.floor(solAmount * 1e9);
 
+        // OPTIMISTIC UPDATE: Update UI immediately
+        updateBalancesOptimistic(-solAmount, usdcOut_scaled);
+        updatePrice(); // Also update price display optimistically
+
         // For extension wallets, use direct transaction building
         if (walletType !== 'local') {
             showStatus(`Preparing sell transaction (slippage: ${slippageTolerance}%)...`, 'info');
@@ -1005,13 +1046,14 @@ async function executeSellSOLForUSDC() {
             showStatus(`✅ Trade successful!`, 'success');
         }
 
-        // Wait a moment for transaction to propagate
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        await updatePrice();
-        await updateBalances();
+        // Update with real values in background (don't await)
+        updatePrice().then(() => updateBalances());
+
     } catch (error) {
         showStatus('❌ Error: ' + error.message, 'error');
         console.error('Sell error:', error);
+        // Revert optimistic update by fetching real balances
+        updateBalances();
     } finally {
         document.getElementById('swapBtn').disabled = false;
     }
@@ -1068,6 +1110,10 @@ async function executeBuySOLWithUSDC() {
         const xntOut_scaled = xntReserve_scaled - newXntReserve_scaled;
         const minXntOut = xntOut_scaled * (1 - slippageTolerance / 100);
         const minXntOutWithDecimals = Math.floor(minXntOut * 1e9);
+
+        // OPTIMISTIC UPDATE: Update UI immediately
+        updateBalancesOptimistic(xntOut_scaled, -usdcAmount);
+        updatePrice(); // Also update price display optimistically
 
         // For extension wallets, use direct transaction building
         if (walletType !== 'local') {
@@ -1189,13 +1235,14 @@ async function executeBuySOLWithUSDC() {
             showStatus(`✅ Trade successful!`, 'success');
         }
 
-        // Wait a moment for transaction to propagate
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        await updatePrice();
-        await updateBalances();
+        // Update with real values in background (don't await)
+        updatePrice().then(() => updateBalances());
+
     } catch (error) {
         showStatus('❌ Error: ' + error.message, 'error');
         console.error('Buy error:', error);
+        // Revert optimistic update by fetching real balances
+        updateBalances();
     } finally {
         document.getElementById('swapBtn').disabled = false;
     }
