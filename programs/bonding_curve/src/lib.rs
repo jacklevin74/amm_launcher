@@ -141,23 +141,29 @@ pub mod bonding_curve {
 
         // Calculate effective price (with proper decimal handling)
         // SECURITY FIX: Use high precision arithmetic (multiply first, divide last)
-        let price_before = ((pool.usdc_reserve as u128)
-            .checked_mul(1_000_000)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(pool.xnt_reserve as u128)
-            .ok_or(ErrorCode::MathOverflow)?) as u64;
+        let price_before = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
         // Calculate price_after with 6 decimal precision: (usdc * 1e6) / xnt
-        let price_after = ((new_usdc_reserve as u128)
-            .checked_mul(1_000_000)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(new_xnt_reserve)
-            .ok_or(ErrorCode::MathOverflow)?) as u64;
+        let price_after = u64::try_from(
+            (new_usdc_reserve as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(new_xnt_reserve)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
         // SECURITY FIX: Use high precision for effective price calculation
-        let effective_price = ((usdc_normalized as u128)
-            .checked_mul(1_000_000)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(xnt_out as u128)
-            .ok_or(ErrorCode::MathOverflow)?) as u64;
+        let effective_price = u64::try_from(
+            (usdc_normalized as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(xnt_out as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
 
         msg!("Trade #{}: Buying {} XNT for {} USDC", pool.trade_count + 1, xnt_out, usdc_amount);
         msg!("Price before: {}, effective: {}, after: {}", price_before, effective_price, price_after);
@@ -222,9 +228,11 @@ pub mod bonding_curve {
             let final_xnt_reserve = new_xnt_reserve
                 .checked_add(xnt_injected as u128)
                 .ok_or(ErrorCode::MathOverflow)?;
-            let final_price = (new_usdc_reserve as u128)
-                .checked_div(final_xnt_reserve)
-                .ok_or(ErrorCode::MathOverflow)? as u64;
+            let final_price = u64::try_from(
+                (new_usdc_reserve as u128)
+                    .checked_div(final_xnt_reserve)
+                    .ok_or(ErrorCode::MathOverflow)?
+            ).map_err(|_| ErrorCode::MathOverflow)?;
 
             msg!("✅ Price defended: ${}", final_price as f64 / 1_000_000.0);
             msg!("New XNT reserve: {}", final_xnt_reserve);
@@ -338,23 +346,29 @@ pub mod bonding_curve {
 
         // Calculate effective price (with proper decimal handling)
         // SECURITY FIX: Use high precision arithmetic (multiply first, divide last)
-        let price_before = ((pool.usdc_reserve as u128)
-            .checked_mul(1_000_000)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(pool.xnt_reserve as u128)
-            .ok_or(ErrorCode::MathOverflow)?) as u64;
+        let price_before = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
         // Calculate price_after with 6 decimal precision: (usdc * 1e6) / xnt
-        let price_after = ((new_usdc_reserve as u128)
-            .checked_mul(1_000_000)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(new_xnt_reserve)
-            .ok_or(ErrorCode::MathOverflow)?) as u64;
+        let price_after = u64::try_from(
+            (new_usdc_reserve as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(new_xnt_reserve)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
         // SECURITY FIX: Use high precision for effective price calculation
-        let effective_price = ((usdc_out as u128)
-            .checked_mul(1_000_000)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(xnt_amount as u128)
-            .ok_or(ErrorCode::MathOverflow)?) as u64;
+        let effective_price = u64::try_from(
+            (usdc_out as u128)
+                .checked_mul(1_000_000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(xnt_amount as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
 
         msg!("Trade #{}: Selling {} XNT for {} USDC", pool.trade_count + 1, xnt_amount, usdc_out_transfer);
         msg!("Price before: {}, effective: {}, after: {}", price_before, effective_price, price_after);
@@ -412,11 +426,13 @@ pub mod bonding_curve {
             let final_xnt_reserve = new_xnt_reserve
                 .checked_sub(xnt_removed as u128)
                 .ok_or(ErrorCode::MathOverflow)?;
-            let final_price = ((new_usdc_reserve as u128)
-                .checked_mul(1_000_000)
-                .ok_or(ErrorCode::MathOverflow)?
-                .checked_div(final_xnt_reserve)
-                .ok_or(ErrorCode::MathOverflow)?) as u64;
+            let final_price = u64::try_from(
+                (new_usdc_reserve as u128)
+                    .checked_mul(1_000_000)
+                    .ok_or(ErrorCode::MathOverflow)?
+                    .checked_div(final_xnt_reserve)
+                    .ok_or(ErrorCode::MathOverflow)?
+            ).map_err(|_| ErrorCode::MathOverflow)?;
 
             msg!("✅ Price defended: ${}", final_price as f64 / 1_000_000.0);
             msg!("New XNT reserve: {}", final_xnt_reserve);
@@ -506,12 +522,16 @@ pub mod bonding_curve {
             .checked_mul(pool.usdc_reserve as u128)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        let price_before = (pool.usdc_reserve as u128)
-            .checked_div(pool.xnt_reserve as u128)
-            .ok_or(ErrorCode::MathOverflow)? as u64;
-        let price_after = (pool.usdc_reserve as u128)
-            .checked_div(new_xnt_reserve as u128)
-            .ok_or(ErrorCode::MathOverflow)? as u64;
+        let price_before = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
+        let price_after = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_div(new_xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
 
         msg!("Depositing {} XNT to pool", xnt_amount);
         msg!("Price decreases: {} -> {} (XNT becomes cheaper)", price_before, price_after);
@@ -562,15 +582,19 @@ pub mod bonding_curve {
         // Therefore: new_usdc = (usdc * new_xnt) / xnt
         // virtual_usdc_to_add = new_usdc - usdc = (usdc * xnt_amount) / xnt
 
-        let virtual_usdc_to_add = (pool.usdc_reserve as u128)
-            .checked_mul(xnt_amount as u128)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(pool.xnt_reserve as u128)
-            .ok_or(ErrorCode::MathOverflow)? as u64;
+        let virtual_usdc_to_add = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_mul(xnt_amount as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
 
-        let price_before = (pool.usdc_reserve as u128)
-            .checked_div(pool.xnt_reserve as u128)
-            .ok_or(ErrorCode::MathOverflow)? as u64;
+        let price_before = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
 
         msg!("Depositing {} XNT + {} virtual USDC (price-neutral)", xnt_amount, virtual_usdc_to_add);
         msg!("Price maintained at ${}", price_before);
@@ -602,9 +626,11 @@ pub mod bonding_curve {
         pool.usdc_reserve = new_usdc_reserve;
         pool.k = new_k;
 
-        let price_after = (pool.usdc_reserve as u128)
-            .checked_div(pool.xnt_reserve as u128)
-            .ok_or(ErrorCode::MathOverflow)? as u64;
+        let price_after = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
         msg!("Price after: ${} (unchanged)", price_after);
 
         Ok(())
@@ -703,12 +729,16 @@ pub mod bonding_curve {
             .checked_mul(pool.usdc_reserve as u128)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        let price_before_withdraw = (pool.usdc_reserve as u128)
-            .checked_div(pool.xnt_reserve as u128)
-            .ok_or(ErrorCode::MathOverflow)? as u64;
-        let price_after_withdraw = (pool.usdc_reserve as u128)
-            .checked_div(new_xnt_reserve as u128)
-            .ok_or(ErrorCode::MathOverflow)? as u64;
+        let price_before_withdraw = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
+        let price_after_withdraw = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_div(new_xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
 
         msg!("Withdrawing {} XNT from pool", xnt_amount);
         msg!("Price increases: {} -> {}",
@@ -766,11 +796,13 @@ pub mod bonding_curve {
 
         // Calculate proportional virtual USDC to remove to maintain price
         // virtual_usdc_to_remove = (usdc_reserve × xnt_amount) / xnt_reserve
-        let virtual_usdc_to_remove = (pool.usdc_reserve as u128)
-            .checked_mul(xnt_amount as u128)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(pool.xnt_reserve as u128)
-            .ok_or(ErrorCode::MathOverflow)? as u64;
+        let virtual_usdc_to_remove = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_mul(xnt_amount as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
 
         let new_xnt_reserve = pool.xnt_reserve
             .checked_sub(xnt_amount)
@@ -786,12 +818,16 @@ pub mod bonding_curve {
             .checked_mul(new_usdc_reserve as u128)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        let price_before = (pool.usdc_reserve as u128)
-            .checked_div(pool.xnt_reserve as u128)
-            .ok_or(ErrorCode::MathOverflow)? as u64;
-        let price_after = (new_usdc_reserve as u128)
-            .checked_div(new_xnt_reserve as u128)
-            .ok_or(ErrorCode::MathOverflow)? as u64;
+        let price_before = u64::try_from(
+            (pool.usdc_reserve as u128)
+                .checked_div(pool.xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
+        let price_after = u64::try_from(
+            (new_usdc_reserve as u128)
+                .checked_div(new_xnt_reserve as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+        ).map_err(|_| ErrorCode::MathOverflow)?;
 
         msg!("Withdrawing {} XNT + {} virtual USDC (price-neutral)", xnt_amount, virtual_usdc_to_remove);
         msg!("Price maintained at ${}", price_before);
