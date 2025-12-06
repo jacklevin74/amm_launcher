@@ -36,6 +36,8 @@ let CONFIG = {
 // Global state
 let connection = null;
 let wallet = null;
+let walletType = null; // 'phantom', 'backpack', 'x1', or 'local'
+let walletAdapter = null; // For extension wallets
 let poolData = null;
 let tradeHistory = [];
 let totalUsdcSpent = 0;
@@ -55,8 +57,15 @@ async function init() {
         // Initial price update to get pool data first
         await updatePrice();
 
-        // Try to load trader wallet from server first
-        await loadTraderWalletFromServer();
+        // Check for saved wallet connection
+        const savedWalletType = localStorage.getItem('walletType');
+        if (savedWalletType && savedWalletType !== 'local') {
+            // Try to reconnect to extension wallet
+            await connectWallet(savedWalletType);
+        } else if (savedWalletType === 'local') {
+            // Try to load local wallet from storage
+            loadWalletFromStorage();
+        }
 
         // Start price updates
         if (!priceUpdateInterval) {
@@ -67,15 +76,129 @@ async function init() {
     }
 }
 
-// Create new wallet
+// Wallet connection functions
+async function connectPhantom() {
+    await connectWallet('phantom');
+}
+
+async function connectBackpack() {
+    await connectWallet('backpack');
+}
+
+async function connectX1() {
+    await connectWallet('x1');
+}
+
+async function connectWallet(type) {
+    try {
+        showStatus(`Connecting to ${type} wallet...`, 'info');
+
+        let provider;
+        switch(type) {
+            case 'phantom':
+                provider = window.phantom?.solana;
+                if (!provider?.isPhantom) {
+                    showStatus('Phantom wallet not found. Please install from phantom.app', 'error');
+                    window.open('https://phantom.app/', '_blank');
+                    return;
+                }
+                break;
+            case 'backpack':
+                provider = window.backpack;
+                if (!provider) {
+                    showStatus('Backpack wallet not found. Please install from backpack.app', 'error');
+                    window.open('https://backpack.app/', '_blank');
+                    return;
+                }
+                break;
+            case 'x1':
+                provider = window.xnft?.solana || window.x1;
+                if (!provider) {
+                    showStatus('X1 wallet not found. Please install the X1 Wallet extension', 'error');
+                    return;
+                }
+                break;
+            default:
+                showStatus('Unknown wallet type', 'error');
+                return;
+        }
+
+        // Connect to wallet
+        const resp = await provider.connect();
+        walletAdapter = provider;
+        walletType = type;
+
+        // Create a wallet-like object with publicKey
+        wallet = {
+            publicKey: resp.publicKey || provider.publicKey,
+            signTransaction: async (tx) => await provider.signTransaction(tx),
+            signAllTransactions: async (txs) => await provider.signAllTransactions(txs),
+        };
+
+        // Save wallet type to localStorage
+        localStorage.setItem('walletType', type);
+
+        showStatus(`Connected to ${type} wallet!`, 'success');
+        updateWalletUI();
+        await updateBalances();
+
+        // Listen for account changes
+        provider.on?.('accountChanged', (publicKey) => {
+            if (publicKey) {
+                wallet.publicKey = publicKey;
+                updateWalletUI();
+                updateBalances();
+            } else {
+                disconnectWallet();
+            }
+        });
+
+        // Listen for disconnect
+        provider.on?.('disconnect', () => {
+            disconnectWallet();
+        });
+
+    } catch (error) {
+        showStatus('Error connecting wallet: ' + error.message, 'error');
+        console.error('Wallet connection error:', error);
+    }
+}
+
+async function disconnectWallet() {
+    try {
+        if (walletAdapter && walletType !== 'local') {
+            await walletAdapter.disconnect?.();
+        }
+
+        wallet = null;
+        walletType = null;
+        walletAdapter = null;
+        localStorage.removeItem('walletType');
+
+        updateWalletUI();
+        showStatus('Wallet disconnected', 'info');
+    } catch (error) {
+        console.error('Error disconnecting wallet:', error);
+        // Force disconnect even if there's an error
+        wallet = null;
+        walletType = null;
+        walletAdapter = null;
+        localStorage.removeItem('walletType');
+        updateWalletUI();
+    }
+}
+
+// Create new wallet (local keypair)
 async function createWallet() {
     try {
-        showStatus('Generating new wallet...', 'info');
+        showStatus('Generating local wallet...', 'info');
 
         wallet = Keypair.generate();
+        walletType = 'local';
 
         // Save to localStorage
         localStorage.setItem('trader_wallet', JSON.stringify(Array.from(wallet.secretKey)));
+        localStorage.setItem('walletType', 'local');
 
         // Request SOL airdrop for transaction fees
         showStatus('Requesting SOL airdrop for gas fees...', 'info');
@@ -88,7 +211,7 @@ async function createWallet() {
         // Airdrop 1000 SOL for testing
         await airdropSOL();
 
-        showStatus('Wallet created successfully!', 'success');
+        showStatus('Local wallet created successfully!', 'success');
         updateWalletUI();
         await updateBalances();
 
@@ -135,7 +258,8 @@ function loadWalletFromStorage() {
         if (stored) {
             const secretKey = new Uint8Array(JSON.parse(stored));
             wallet = Keypair.fromSecretKey(secretKey);
-            showStatus('Loaded wallet from browser cache', 'success');
+            walletType = 'local';
+            showStatus('Loaded local wallet from browser cache', 'success');
             updateWalletUI();
             updateBalances();
         }
@@ -155,6 +279,26 @@ function updateWalletUI() {
         document.getElementById('hasWallet').style.display = 'block';
         document.getElementById('walletAddress').textContent = wallet.publicKey.toString();
         document.getElementById('swapBtn').disabled = false;
+
+        // Update wallet icon and type
+        const walletIconMap = {
+            'phantom': '👻',
+            'backpack': '🎒',
+            'x1': '⚡',
+            'local': '🔑'
+        };
+        const walletNameMap = {
+            'phantom': 'Phantom',
+            'backpack': 'Backpack',
+            'x1': 'X1 Wallet',
+            'local': 'Local Wallet'
+        };
+
+        const icon = walletIconMap[walletType] || '💼';
+        const name = walletNameMap[walletType] || 'Unknown';
+
+        document.getElementById('walletIcon').textContent = icon;
+        document.getElementById('walletType').textContent = name;
     }
 }
 
@@ -680,29 +824,106 @@ async function executeSellSOLForUSDC() {
         const usdcOut_scaled = usdcReserve_s - newUsdcReserve_s;
         const minUsdcOut = usdcOut_scaled * (1 - slippageTolerance / 100);
         const minUsdcOutWithDecimals = Math.floor(minUsdcOut * 1e6);
-
-        // Sell wSOL (XNT) for USDC on AMM
-        showStatus(`Selling ${solAmount} wSOL for USDC (slippage: ${slippageTolerance}%)...`, 'info');
-        addLog(`Selling ${solAmount} wSOL for USDC (min output: ${minUsdcOut.toFixed(2)} USDC)...`, 'info');
         const xntWithDecimals = Math.floor(solAmount * 1e9);
-        const sellResponse = await fetch('/api/sell', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                amount: xntWithDecimals,
-                minUsdcOut: minUsdcOutWithDecimals
-            })
-        });
-        const sellResult = await sellResponse.json();
-        if (!sellResult.success) throw new Error('Sell failed: ' + sellResult.error);
 
-        showStatus(`✅ Sold ${solAmount} wSOL for USDC! TX: ${sellResult.tx.substring(0, 20)}...`, 'success');
+        // For extension wallets, use direct transaction building
+        if (walletType !== 'local') {
+            showStatus(`Preparing sell transaction (slippage: ${slippageTolerance}%)...`, 'info');
+            addLog(`Selling ${solAmount} wSOL for USDC (min output: ${minUsdcOut.toFixed(2)} USDC)...`, 'info');
+
+            // Get pool data
+            const poolAddress = new PublicKey(CONFIG.POOL_ADDRESS);
+            const programId = new PublicKey(CONFIG.PROGRAM_ID);
+            const poolAccountInfo = await connection.getAccountInfo(poolAddress);
+            const poolData_raw = poolAccountInfo.data;
+
+            const xntMint = new PublicKey(poolData_raw.slice(40, 72));
+            const usdcMint = new PublicKey(poolData_raw.slice(72, 104));
+            const poolXnt = new PublicKey(poolData_raw.slice(104, 136));
+            const poolUsdc = new PublicKey(poolData_raw.slice(136, 168));
+            const ceilingReserveXnt = new PublicKey(poolData_raw.slice(219, 251));
+
+            // Get user token accounts
+            const userXnt = await getAssociatedTokenAddress(xntMint, wallet.publicKey);
+            const userUsdc = await getAssociatedTokenAddress(usdcMint, wallet.publicKey);
+
+            // Build sell instruction
+            const discriminator = Buffer.from([51, 230, 133, 164, 1, 127, 131, 173]);
+            const amountBuffer = Buffer.alloc(8);
+            amountBuffer.writeBigUInt64LE(BigInt(xntWithDecimals), 0);
+            const minUsdcOutBuffer = Buffer.alloc(8);
+            minUsdcOutBuffer.writeBigUInt64LE(BigInt(minUsdcOutWithDecimals), 0);
+            const data = Buffer.concat([discriminator, amountBuffer, minUsdcOutBuffer]);
+
+            const sellIx = new solanaWeb3.TransactionInstruction({
+                programId,
+                keys: [
+                    { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+                    { pubkey: poolAddress, isSigner: false, isWritable: true },
+                    { pubkey: poolXnt, isSigner: false, isWritable: true },
+                    { pubkey: poolUsdc, isSigner: false, isWritable: true },
+                    { pubkey: userXnt, isSigner: false, isWritable: true },
+                    { pubkey: userUsdc, isSigner: false, isWritable: true },
+                    { pubkey: ceilingReserveXnt, isSigner: false, isWritable: true },
+                    { pubkey: new PublicKey(CONFIG.TOKEN_PROGRAM_ID), isSigner: false, isWritable: false },
+                ],
+                data,
+            });
+
+            const tx = new solanaWeb3.Transaction().add(sellIx);
+            const signature = await signAndSendTransaction(tx);
+
+            addLog(`✓ Sell successful! TX: ${signature.substring(0, 20)}...`, 'success');
+            showStatus(`✅ Trade successful! View on explorer: https://explorer.solana.com/tx/${signature}?cluster=custom&customUrl=http://localhost:8899`, 'success');
+        } else {
+            // Local wallet: use API endpoint
+            showStatus(`Selling ${solAmount} wSOL for USDC (slippage: ${slippageTolerance}%)...`, 'info');
+            addLog(`Selling ${solAmount} wSOL for USDC (min output: ${minUsdcOut.toFixed(2)} USDC)...`, 'info');
+            const sellResponse = await fetch('/api/sell', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount: xntWithDecimals,
+                    minUsdcOut: minUsdcOutWithDecimals
+                })
+            });
+            const sellResult = await sellResponse.json();
+            if (!sellResult.success) throw new Error('Sell failed: ' + sellResult.error);
+
+            addLog(`✓ Sold ${solAmount} wSOL for USDC! TX: ${sellResult.tx.substring(0, 20)}...`, 'success');
+            showStatus(`✅ Trade successful!`, 'success');
+        }
+
         await updatePrice();
         await updateBalances();
     } catch (error) {
         showStatus('❌ Error: ' + error.message, 'error');
+        console.error('Sell error:', error);
     } finally {
         document.getElementById('swapBtn').disabled = false;
+    }
+}
+
+// Helper: Sign and send transaction
+async function signAndSendTransaction(transaction) {
+    if (walletType === 'local') {
+        // Local wallet: sign and send using connection
+        const signature = await connection.sendTransaction(transaction, [wallet], { skipPreflight: false });
+        await connection.confirmTransaction(signature, 'confirmed');
+        return signature;
+    } else {
+        // Extension wallet: use wallet adapter
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = wallet.publicKey;
+
+        // Sign transaction
+        const signed = await wallet.signTransaction(transaction);
+
+        // Send raw transaction
+        const signature = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+        await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
+        return signature;
     }
 }
 
@@ -735,34 +956,90 @@ async function executeBuySOLWithUSDC() {
         const minXntOut = xntOut_scaled * (1 - slippageTolerance / 100);
         const minXntOutWithDecimals = Math.floor(minXntOut * 1e9);
 
-        // Buy XNT (wSOL) with USDC on AMM
-        showStatus(`Buying wSOL with ${usdcAmount} USDC (slippage: ${slippageTolerance}%)...`, 'info');
-        addLog(`Buying XNT (wSOL) with ${usdcAmount} USDC on AMM (min output: ${minXntOut.toFixed(2)} XNT)...`, 'info');
-        // IMPORTANT: USDC is e6 (6 decimals), convert user input to atomic units
-        const usdcWithDecimals = Math.floor(usdcAmount * 1e6);
-        const buyResponse = await fetch('/api/buy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                amount: usdcWithDecimals,
-                minXntOut: minXntOutWithDecimals
-            })
-        });
-        const buyResult = await buyResponse.json();
-        if (!buyResult.success) throw new Error('Buy failed: ' + buyResult.error);
+        // For extension wallets, use direct transaction building
+        if (walletType !== 'local') {
+            showStatus(`Preparing buy transaction (slippage: ${slippageTolerance}%)...`, 'info');
+            addLog(`Buying XNT (wSOL) with ${usdcAmount} USDC (min output: ${minXntOut.toFixed(2)} XNT)...`, 'info');
 
-        // Calculate how much XNT (wSOL) we got (from the quote)
-        const k = poolData.xntReserve * poolData.usdcReserve;
-        const newUsdcReserve = poolData.usdcReserve + usdcWithDecimals;
-        const newXntReserve = k / newUsdcReserve;
-        const xntReceived = Math.floor(poolData.xntReserve - newXntReserve);
-        addLog(`✓ Bought ${(xntReceived / 1e9).toFixed(2)} wSOL (XNT). TX: ${buyResult.tx.substring(0, 20)}...`, 'success');
+            // Build transaction using the program
+            const usdcWithDecimals = Math.floor(usdcAmount * 1e6);
 
-        showStatus(`✅ Received ${(xntReceived / 1e9).toFixed(2)} wSOL for ${usdcAmount} USDC! (You can unwrap wSOL to SOL in any wallet)`, 'success');
+            // Get pool data
+            const poolAddress = new PublicKey(CONFIG.POOL_ADDRESS);
+            const programId = new PublicKey(CONFIG.PROGRAM_ID);
+            const poolAccountInfo = await connection.getAccountInfo(poolAddress);
+            const poolData_raw = poolAccountInfo.data;
+
+            const xntMint = new PublicKey(poolData_raw.slice(40, 72));
+            const usdcMint = new PublicKey(poolData_raw.slice(72, 104));
+            const poolXnt = new PublicKey(poolData_raw.slice(104, 136));
+            const poolUsdc = new PublicKey(poolData_raw.slice(136, 168));
+            const ceilingReserveXnt = new PublicKey(poolData_raw.slice(219, 251));
+
+            // Get user token accounts
+            const userXnt = await getAssociatedTokenAddress(xntMint, wallet.publicKey);
+            const userUsdc = await getAssociatedTokenAddress(usdcMint, wallet.publicKey);
+
+            // Derive ceiling reserve PDA
+            const [ceilingReservePda] = await PublicKey.findProgramAddress(
+                [Buffer.from('ceiling_reserve'), poolAddress.toBuffer()],
+                programId
+            );
+
+            // Build buy instruction
+            const discriminator = Buffer.from([102, 6, 61, 18, 1, 218, 235, 234]);
+            const amountBuffer = Buffer.alloc(8);
+            amountBuffer.writeBigUInt64LE(BigInt(usdcWithDecimals), 0);
+            const minXntOutBuffer = Buffer.alloc(8);
+            minXntOutBuffer.writeBigUInt64LE(BigInt(minXntOutWithDecimals), 0);
+            const data = Buffer.concat([discriminator, amountBuffer, minXntOutBuffer]);
+
+            const buyIx = new solanaWeb3.TransactionInstruction({
+                programId,
+                keys: [
+                    { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+                    { pubkey: poolAddress, isSigner: false, isWritable: true },
+                    { pubkey: poolXnt, isSigner: false, isWritable: true },
+                    { pubkey: poolUsdc, isSigner: false, isWritable: true },
+                    { pubkey: userUsdc, isSigner: false, isWritable: true },
+                    { pubkey: userXnt, isSigner: false, isWritable: true },
+                    { pubkey: ceilingReservePda, isSigner: false, isWritable: false },
+                    { pubkey: ceilingReserveXnt, isSigner: false, isWritable: true },
+                    { pubkey: new PublicKey(CONFIG.TOKEN_PROGRAM_ID), isSigner: false, isWritable: false },
+                ],
+                data,
+            });
+
+            const tx = new solanaWeb3.Transaction().add(buyIx);
+            const signature = await signAndSendTransaction(tx);
+
+            addLog(`✓ Buy successful! TX: ${signature.substring(0, 20)}...`, 'success');
+            showStatus(`✅ Trade successful! View on explorer: https://explorer.solana.com/tx/${signature}?cluster=custom&customUrl=http://localhost:8899`, 'success');
+        } else {
+            // Local wallet: use API endpoint
+            showStatus(`Buying wSOL with ${usdcAmount} USDC (slippage: ${slippageTolerance}%)...`, 'info');
+            addLog(`Buying XNT (wSOL) with ${usdcAmount} USDC on AMM (min output: ${minXntOut.toFixed(2)} XNT)...`, 'info');
+            const usdcWithDecimals = Math.floor(usdcAmount * 1e6);
+            const buyResponse = await fetch('/api/buy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount: usdcWithDecimals,
+                    minXntOut: minXntOutWithDecimals
+                })
+            });
+            const buyResult = await buyResponse.json();
+            if (!buyResult.success) throw new Error('Buy failed: ' + buyResult.error);
+
+            addLog(`✓ Bought wSOL (XNT). TX: ${buyResult.tx.substring(0, 20)}...`, 'success');
+            showStatus(`✅ Trade successful!`, 'success');
+        }
+
         await updatePrice();
         await updateBalances();
     } catch (error) {
         showStatus('❌ Error: ' + error.message, 'error');
+        console.error('Buy error:', error);
     } finally {
         document.getElementById('swapBtn').disabled = false;
     }
@@ -875,6 +1152,10 @@ window.addEventListener('load', init);
 
 // Expose functions to global scope
 window.createWallet = createWallet;
+window.connectPhantom = connectPhantom;
+window.connectBackpack = connectBackpack;
+window.connectX1 = connectX1;
+window.disconnectWallet = disconnectWallet;
 window.airdropUSDC = airdropUSDC;
 window.setAmount = setAmount;
 window.setSlippage = setSlippage;

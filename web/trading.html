@@ -504,13 +504,33 @@
 
                 <div class="wallet-section" id="walletSection">
                     <div id="noWallet">
-                        <p style="margin-bottom: 15px; color: #8bc;">No wallet found. Create a new wallet to start trading.</p>
-                        <button class="btn-primary btn-full" onclick="createWallet()">Create New Wallet</button>
+                        <p style="margin-bottom: 15px; color: #8bc;">Connect your wallet to start trading</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                            <button class="btn-primary" onclick="connectPhantom()" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <span>👻</span> Phantom
+                            </button>
+                            <button class="btn-primary" onclick="connectBackpack()" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                🎒 Backpack
+                            </button>
+                            <button class="btn-primary" onclick="connectX1()" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                ⚡ X1 Wallet
+                            </button>
+                            <button class="btn-secondary" onclick="createWallet()" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                🔑 Local Wallet
+                            </button>
+                        </div>
                     </div>
 
                     <div id="hasWallet" style="display: none;">
                         <div class="wallet-info">
-                            <div class="label">WALLET ADDRESS:</div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div class="label">CONNECTED WALLET:</div>
+                                <button class="btn-secondary" onclick="disconnectWallet()" style="padding: 5px 10px; font-size: 0.8em;">Disconnect</button>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                                <span id="walletIcon" style="font-size: 1.5em;">👻</span>
+                                <span id="walletType" style="color: #8bc; font-size: 0.9em;">Phantom</span>
+                            </div>
                             <div class="value" id="walletAddress">-</div>
                         </div>
 
