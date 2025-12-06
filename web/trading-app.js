@@ -588,17 +588,17 @@ async function updateBalances() {
         }
 
         // Update UI
-        // IMPORTANT: USDC balance is e6 (6 decimals), XNT (wSOL) is e9 (9 decimals)
+        // IMPORTANT: USDC balance is e6 (6 decimals), SOL/XNT is e9 (9 decimals)
         document.getElementById('usdcBalance').textContent = (usdcBalance / 1e6).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('solBalance').textContent = (xntBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('solBalance').textContent = (solBalance / 1e9).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         // Update position summary (only if poolData is available)
         if (poolData && poolData.price) {
-            const xntValueUSDC = (xntBalance / 1e9) * poolData.price;
+            const solValueUSDC = (solBalance / 1e9) * poolData.price;
             const usdcValue = usdcBalance / 1e6; // IMPORTANT: USDC is e6 (6 decimals)
-            const totalPortfolio = xntValueUSDC + usdcValue;
+            const totalPortfolio = solValueUSDC + usdcValue;
 
-            document.getElementById('xntValueUSDC').textContent = '$' + xntValueUSDC.toLocaleString();
+            document.getElementById('xntValueUSDC').textContent = '$' + solValueUSDC.toLocaleString();
             document.getElementById('totalPortfolio').textContent = '$' + totalPortfolio.toLocaleString();
 
             // Calculate average entry price
@@ -607,8 +607,8 @@ async function updateBalances() {
                 document.getElementById('avgEntryPrice').textContent = '$' + avgEntry.toFixed(6);
 
                 // Calculate P&L
-                const currentValue = (xntBalance / 1e9) * poolData.price;
-                const costBasis = (xntBalance / 1e9) * avgEntry;
+                const currentValue = (solBalance / 1e9) * poolData.price;
+                const costBasis = (solBalance / 1e9) * avgEntry;
                 const pnl = currentValue - costBasis;
                 const pnlPercent = costBasis > 0 ? (pnl / costBasis * 100) : 0;
 
@@ -890,7 +890,27 @@ async function executeSellSOLForUSDC() {
             const userXnt = await getAssociatedTokenAddress(xntMint, wallet.publicKey);
             const userUsdc = await getAssociatedTokenAddress(usdcMint, wallet.publicKey);
 
-            // Build sell instruction
+            // Build transaction: wrap SOL → wSOL, sell wSOL for USDC
+            const tx = new solanaWeb3.Transaction();
+
+            // Step 1: Transfer SOL to wSOL account (wrapping)
+            const transferIx = solanaWeb3.SystemProgram.transfer({
+                fromPubkey: wallet.publicKey,
+                toPubkey: userXnt,
+                lamports: BigInt(xntWithDecimals),
+            });
+            tx.add(transferIx);
+
+            // Step 2: Sync native (complete the wrap)
+            const syncNativeData = Buffer.from([17]); // SyncNative instruction discriminator
+            const syncIx = new solanaWeb3.TransactionInstruction({
+                programId: new PublicKey(CONFIG.TOKEN_PROGRAM_ID),
+                keys: [{ pubkey: userXnt, isSigner: false, isWritable: true }],
+                data: syncNativeData,
+            });
+            tx.add(syncIx);
+
+            // Step 3: Build sell instruction
             const discriminator = Buffer.from([51, 230, 133, 164, 1, 127, 131, 173]);
             const amountBuffer = Buffer.alloc(8);
             amountBuffer.writeBigUInt64LE(BigInt(xntWithDecimals), 0);
@@ -912,8 +932,7 @@ async function executeSellSOLForUSDC() {
                 ],
                 data,
             });
-
-            const tx = new solanaWeb3.Transaction().add(sellIx);
+            tx.add(sellIx);
             const signature = await signAndSendTransaction(tx);
 
             addLog(`✓ Sell successful! TX: ${signature.substring(0, 20)}...`, 'success');
@@ -937,6 +956,8 @@ async function executeSellSOLForUSDC() {
             showStatus(`✅ Trade successful!`, 'success');
         }
 
+        // Wait a moment for transaction to propagate
+        await new Promise(resolve => setTimeout(resolve, 1000));
         await updatePrice();
         await updateBalances();
     } catch (error) {
@@ -1053,7 +1074,22 @@ async function executeBuySOLWithUSDC() {
                 data,
             });
 
-            const tx = new solanaWeb3.Transaction().add(buyIx);
+            // Build transaction: buy wSOL with USDC, then unwrap wSOL → SOL
+            const tx = new solanaWeb3.Transaction();
+            tx.add(buyIx);
+
+            // Add unwrap instruction: close wSOL account to get SOL back
+            const closeAccountData = Buffer.from([9]); // CloseAccount instruction discriminator
+            const closeIx = new solanaWeb3.TransactionInstruction({
+                programId: new PublicKey(CONFIG.TOKEN_PROGRAM_ID),
+                keys: [
+                    { pubkey: userXnt, isSigner: false, isWritable: true },        // wSOL account to close
+                    { pubkey: wallet.publicKey, isSigner: false, isWritable: true }, // destination for lamports
+                    { pubkey: wallet.publicKey, isSigner: true, isWritable: false }, // owner of the wSOL account
+                ],
+                data: closeAccountData,
+            });
+            tx.add(closeIx);
             const signature = await signAndSendTransaction(tx);
 
             addLog(`✓ Buy successful! TX: ${signature.substring(0, 20)}...`, 'success');
@@ -1078,6 +1114,8 @@ async function executeBuySOLWithUSDC() {
             showStatus(`✅ Trade successful!`, 'success');
         }
 
+        // Wait a moment for transaction to propagate
+        await new Promise(resolve => setTimeout(resolve, 1000));
         await updatePrice();
         await updateBalances();
     } catch (error) {
