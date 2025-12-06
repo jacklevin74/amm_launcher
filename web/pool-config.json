@@ -1,12 +1,12 @@
 {
   "rpcUrl": "http://localhost:8899",
-  "poolAddress": "FvzjGDX9sNBDo2j9ZfHgDRkxf8pQGRdEFjf1wPN26am9",
+  "poolAddress": "8nqpnqCPGhX5umbo2cmJ1Ltdhr8X3VdZkptzUCaFG761",
   "xntMint": "So11111111111111111111111111111111111111112",
-  "usdcMint": "ExN962HYLeeriN2wJiSansenvVifoPFwGHqgYkG2sKuc",
-  "ceilingReserveWSOL": "DgZKRJ3eopYQhWbbscUGy1YQJ2Z1ystBim8sYbNA7xCV",
-  "ceilingReservePDA": "Fs2Q47kSXvNhPyBphr79rzYhosz32ocLKzRiNp7GNe9F",
-  "poolXNT": "7MaEpTGc4kFLrtMk5Zn4MFMG4dV62NjzC3NZdfj6DJD3",
-  "poolUSDC": "ET2VXqDtAFc7MFfEWRR6Qmh7yd6hD7b1J12XadXxJJnY",
+  "usdcMint": "2d4ewagDigKQdg7woaCMyTW3UpQ8UDgMnTUwWHz9K9Nn",
+  "ceilingReserveWSOL": "HZrrzoC7meBxdzYD5rtRXvamhR5QZnXwSNePso9iQPPj",
+  "ceilingReservePDA": "BAy8R6N4LkUKtcHKmgjeyiDWMQvQFyD512GijXdXZaTJ",
+  "poolXNT": "BFsberZRuHRhX6F7qv4zitXaMybSJJZRqUeg5QnqbHjR",
+  "poolUSDC": "HKxo1bsNF9Ph3Apb6DpNr55CU4s6AjFnQk9YT6FSXMK4",
   "authority": "FMEbtsgxMmxMBUvRRBAXye7XZPbJdXaADCPQ2nf7emXG",
   "trader": "7xPuJo5iNWqaFuievACD8n1W9KQDoWWbdb5pfHqJbudT",
   "programId": "2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF"
