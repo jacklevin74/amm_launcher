@@ -711,13 +711,17 @@ function setSlippage(percentage) {
     document.getElementById('customSlippage').value = percentage;
 
     // Update button highlights
-    ['0.1', '0.5', '1', '2', '5'].forEach(val => {
+    ['0.5', '1', '2'].forEach(val => {
         const btn = document.getElementById(`slippage-${val}`);
         if (btn) {
             if (parseFloat(val) === percentage) {
-                btn.style.background = 'rgba(102, 170, 187, 0.15)';
+                btn.style.background = 'rgba(91, 158, 255, 0.15)';
+                btn.style.borderColor = 'rgba(91, 158, 255, 0.3)';
+                btn.style.color = '#5b9eff';
             } else {
-                btn.style.background = 'rgba(102, 170, 187, 0.05)';
+                btn.style.background = 'transparent';
+                btn.style.borderColor = 'rgba(139, 146, 168, 0.2)';
+                btn.style.color = '#8b92a8';
             }
         }
     });
@@ -1190,7 +1194,24 @@ function readU64(data, offset) {
 // Initialize on load
 window.addEventListener('load', init);
 
+// Toggle ceiling reserve section
+function toggleCeilingReserve() {
+    const content = document.getElementById('ceilingReserveContent');
+    const triangle = document.getElementById('ceilingReserveTriangle');
+
+    if (content.classList.contains('open')) {
+        content.classList.remove('open');
+        triangle.classList.remove('open');
+        triangle.textContent = '▶';
+    } else {
+        content.classList.add('open');
+        triangle.classList.add('open');
+        triangle.textContent = '▼';
+    }
+}
+
 // Expose functions to global scope
+window.toggleCeilingReserve = toggleCeilingReserve;
 window.openWalletModal = openWalletModal;
 window.closeWalletModal = closeWalletModal;
 window.closeWalletModalOnOverlay = closeWalletModalOnOverlay;

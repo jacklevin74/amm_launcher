@@ -230,6 +230,59 @@
             color: #5a6178;
         }
 
+        /* Collapsible Section */
+        .collapsible-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+            padding: 12px;
+            background: rgba(91, 158, 255, 0.04);
+            border: 1px solid rgba(91, 158, 255, 0.15);
+            transition: background 0.12s ease;
+        }
+
+        .collapsible-header:hover {
+            background: rgba(91, 158, 255, 0.08);
+        }
+
+        .collapsible-triangle {
+            font-size: 10px;
+            color: #8b92a8;
+            transition: transform 0.15s ease;
+            display: inline-block;
+            width: 12px;
+        }
+
+        .collapsible-triangle.open {
+            transform: rotate(90deg);
+        }
+
+        .collapsible-title {
+            margin: 0;
+            color: #8b92a8;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.2s ease;
+        }
+
+        .collapsible-content.open {
+            max-height: 300px;
+        }
+
+        .collapsible-inner {
+            padding: 12px;
+            border: 1px solid rgba(91, 158, 255, 0.15);
+            border-top: none;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -781,14 +834,21 @@
                             </div>
                         </div>
 
-                        <div style="margin-top: 20px; padding: 15px; background: rgba(187, 170, 153, 0.05); border: 1px solid #ba9;">
-                            <h3 style="margin: 0 0 10px 0; color: #ba9; font-size: 1.1em;">Ceiling Defense Reserve</h3>
-                            <div class="balance-item" style="background: rgba(187, 170, 153, 0.03);">
-                                <div class="label">CEILING RESERVE XNT</div>
-                                <div class="amount" id="ceilingReserveXnt" style="color: #ba9; font-size: 1.3em; font-weight: bold;">0</div>
+                        <div style="margin-top: 20px;">
+                            <div class="collapsible-header" onclick="toggleCeilingReserve()">
+                                <span class="collapsible-triangle" id="ceilingReserveTriangle">▶</span>
+                                <h3 class="collapsible-title">Ceiling Defense Reserve</h3>
                             </div>
-                            <div class="status info" style="margin-top: 10px; font-size: 0.85em;">
-                                Auto-injected when price exceeds $2.00
+                            <div class="collapsible-content" id="ceilingReserveContent">
+                                <div class="collapsible-inner">
+                                    <div class="balance-item" style="background: rgba(91, 158, 255, 0.04); border: 1px solid rgba(91, 158, 255, 0.1); padding: 10px;">
+                                        <div class="label" style="font-size: 10px; color: #5a6178;">CEILING RESERVE XNT</div>
+                                        <div class="amount" id="ceilingReserveXnt" style="color: #ffffff; font-size: 13px; font-weight: 600; margin-top: 4px;">0</div>
+                                    </div>
+                                    <div style="margin-top: 8px; font-size: 10px; color: #5a6178;">
+                                        Auto-injected when price exceeds $2.00
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -841,22 +901,15 @@
                     </div>
 
                     <!-- Slippage Settings -->
-                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(102, 170, 187, 0.05); border: 1px solid #6ab;">
-                        <div style="margin-bottom: 10px; color: #8bc; font-weight: bold;">SLIPPAGE TOLERANCE:</div>
-                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                            <button class="quick-amount-btn" onclick="setSlippage(0.1)" id="slippage-0.1">0.1%</button>
-                            <button class="quick-amount-btn" onclick="setSlippage(0.5)" id="slippage-0.5" style="background: rgba(102, 170, 187, 0.15);">0.5%</button>
-                            <button class="quick-amount-btn" onclick="setSlippage(1)" id="slippage-1">1%</button>
-                            <button class="quick-amount-btn" onclick="setSlippage(2)" id="slippage-2">2%</button>
-                            <button class="quick-amount-btn" onclick="setSlippage(5)" id="slippage-5">5%</button>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <label style="color: #8bc; font-size: 0.9em; white-space: nowrap;">Custom:</label>
-                            <input type="number" id="customSlippage" step="0.1" min="0.1" max="50" value="0.5" style="flex: 1; padding: 8px; background: rgba(102, 170, 187, 0.1); border: 1px solid #6ab; color: #6ab; font-family: 'Courier New', monospace; font-size: 0.9em;" oninput="setSlippage(parseFloat(this.value))">
-                            <span style="color: #8bc; font-size: 0.9em;">%</span>
-                        </div>
-                        <div style="margin-top: 8px; font-size: 0.8em; color: #8bc;">
-                            ℹ️ Protects you from price changes during transaction execution
+                    <div style="margin-bottom: 16px; padding: 12px; background: rgba(91, 158, 255, 0.04); border: 1px solid rgba(91, 158, 255, 0.15);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="color: #8b92a8; font-size: 11px; font-weight: 500;">Slippage Tolerance</div>
+                            <div style="display: flex; gap: 6px; align-items: center;">
+                                <button onclick="setSlippage(0.5)" id="slippage-0.5" style="padding: 4px 8px; background: rgba(91, 158, 255, 0.15); border: 1px solid rgba(91, 158, 255, 0.3); color: #5b9eff; font-size: 10px; cursor: pointer;">0.5%</button>
+                                <button onclick="setSlippage(1)" id="slippage-1" style="padding: 4px 8px; background: transparent; border: 1px solid rgba(139, 146, 168, 0.2); color: #8b92a8; font-size: 10px; cursor: pointer;">1%</button>
+                                <button onclick="setSlippage(2)" id="slippage-2" style="padding: 4px 8px; background: transparent; border: 1px solid rgba(139, 146, 168, 0.2); color: #8b92a8; font-size: 10px; cursor: pointer;">2%</button>
+                                <input type="number" id="customSlippage" step="0.1" min="0.1" max="50" value="0.5" style="width: 50px; padding: 4px 6px; background: transparent; border: 1px solid rgba(139, 146, 168, 0.2); color: #ffffff; font-size: 10px; text-align: center;" oninput="setSlippage(parseFloat(this.value))">
+                            </div>
                         </div>
                     </div>
 
