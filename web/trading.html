@@ -25,17 +25,205 @@
         }
 
         .header {
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             padding: 20px;
             border: 1px solid #6ab;
             margin-bottom: 20px;
             background: rgba(102, 170, 187, 0.03);
         }
 
+        .header-title {
+            flex: 1;
+        }
+
         .header h1 {
             font-size: 2em;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             color: #6ab;
+        }
+
+        .wallet-connect-btn {
+            padding: 12px 24px;
+            background: rgba(102, 170, 187, 0.1);
+            border: 2px solid #6ab;
+            color: #6ab;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .wallet-connect-btn:hover {
+            background: rgba(102, 170, 187, 0.2);
+        }
+
+        .wallet-connected {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            background: rgba(102, 170, 187, 0.08);
+            border: 2px solid #6ab;
+        }
+
+        .wallet-connected .wallet-icon {
+            font-size: 1.3em;
+        }
+
+        .wallet-connected .wallet-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .wallet-connected .wallet-address {
+            font-size: 0.85em;
+            color: #6ab;
+            font-family: monospace;
+        }
+
+        .wallet-connected .wallet-type-label {
+            font-size: 0.75em;
+            color: #8bc;
+        }
+
+        .wallet-disconnect-btn {
+            padding: 6px 12px;
+            background: rgba(204, 153, 102, 0.1);
+            border: 1px solid #c96;
+            color: #c96;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .wallet-disconnect-btn:hover {
+            background: rgba(204, 153, 102, 0.2);
+        }
+
+        /* Wallet Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #0a0e1a;
+            border: 2px solid #6ab;
+            padding: 30px;
+            max-width: 450px;
+            width: 90%;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #6ab;
+        }
+
+        .modal-header h2 {
+            color: #6ab;
+            font-size: 1.5em;
+            margin: 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #c96;
+            font-size: 1.5em;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-close:hover {
+            color: #ff0040;
+        }
+
+        .wallet-options {
+            display: grid;
+            gap: 15px;
+        }
+
+        .wallet-option {
+            padding: 15px 20px;
+            background: rgba(102, 170, 187, 0.05);
+            border: 2px solid #6ab;
+            color: #6ab;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-align: left;
+        }
+
+        .wallet-option:hover {
+            background: rgba(102, 170, 187, 0.15);
+            border-color: #8bc;
+        }
+
+        .wallet-option .wallet-icon {
+            font-size: 1.8em;
+        }
+
+        .wallet-option .wallet-details {
+            flex: 1;
+        }
+
+        .wallet-option .wallet-name {
+            display: block;
+            margin-bottom: 3px;
+        }
+
+        .wallet-option .wallet-desc {
+            font-size: 0.75em;
+            color: #8bc;
+            font-weight: normal;
+        }
+
+        .wallet-option.testing {
+            border-color: #ba9;
+            background: rgba(187, 170, 153, 0.05);
+        }
+
+        .wallet-option.testing:hover {
+            background: rgba(187, 170, 153, 0.15);
+            border-color: #ba9;
+        }
+
+        .wallet-option.testing .wallet-details {
+            color: #ba9;
         }
 
         .grid {
@@ -493,8 +681,63 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>XNT TRADING TERMINAL</h1>
-            <p>Live Bonding Curve Trading | $1.00 - $2.00 Corridor</p>
+            <div class="header-title">
+                <h1>XNT TRADING TERMINAL</h1>
+                <p>Live Bonding Curve Trading | $1.00 - $2.00 Corridor</p>
+            </div>
+            <div id="walletButtonContainer">
+                <button class="wallet-connect-btn" id="connectWalletBtn" onclick="openWalletModal()">
+                    <span>💼</span> Connect Wallet
+                </button>
+                <div class="wallet-connected" id="walletConnectedDisplay" style="display: none;">
+                    <span class="wallet-icon" id="headerWalletIcon">👻</span>
+                    <div class="wallet-info">
+                        <span class="wallet-type-label" id="headerWalletType">Phantom</span>
+                        <span class="wallet-address" id="headerWalletAddress">-</span>
+                    </div>
+                    <button class="wallet-disconnect-btn" onclick="disconnectWallet()">Disconnect</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Wallet Selection Modal -->
+        <div class="modal-overlay" id="walletModal" onclick="closeWalletModalOnOverlay(event)">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Connect Wallet</h2>
+                    <button class="modal-close" onclick="closeWalletModal()">×</button>
+                </div>
+                <div class="wallet-options">
+                    <button class="wallet-option" onclick="connectPhantomAndClose()">
+                        <span class="wallet-icon">👻</span>
+                        <div class="wallet-details">
+                            <span class="wallet-name">Phantom</span>
+                            <span class="wallet-desc">Most popular Solana wallet</span>
+                        </div>
+                    </button>
+                    <button class="wallet-option" onclick="connectBackpackAndClose()">
+                        <span class="wallet-icon">🎒</span>
+                        <div class="wallet-details">
+                            <span class="wallet-name">Backpack</span>
+                            <span class="wallet-desc">xNFT-native wallet experience</span>
+                        </div>
+                    </button>
+                    <button class="wallet-option" onclick="connectX1AndClose()">
+                        <span class="wallet-icon">⚡</span>
+                        <div class="wallet-details">
+                            <span class="wallet-name">X1 Wallet</span>
+                            <span class="wallet-desc">High-performance wallet</span>
+                        </div>
+                    </button>
+                    <button class="wallet-option testing" onclick="createWalletAndClose()">
+                        <span class="wallet-icon">🔑</span>
+                        <div class="wallet-details">
+                            <span class="wallet-name">Local Wallet</span>
+                            <span class="wallet-desc">For testing only (browser-based)</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <div class="grid">
@@ -504,35 +747,12 @@
 
                 <div class="wallet-section" id="walletSection">
                     <div id="noWallet">
-                        <p style="margin-bottom: 15px; color: #8bc;">Connect your wallet to start trading</p>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-                            <button class="btn-primary" onclick="connectPhantom()" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                <span>👻</span> Phantom
-                            </button>
-                            <button class="btn-primary" onclick="connectBackpack()" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                🎒 Backpack
-                            </button>
-                            <button class="btn-primary" onclick="connectX1()" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                ⚡ X1 Wallet
-                            </button>
-                            <button class="btn-secondary" onclick="createWallet()" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                🔑 Local Wallet
-                            </button>
-                        </div>
+                        <p style="margin-bottom: 15px; color: #8bc; text-align: center; padding: 40px 20px;">
+                            Connect your wallet using the button in the top right corner to start trading
+                        </p>
                     </div>
 
                     <div id="hasWallet" style="display: none;">
-                        <div class="wallet-info">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                <div class="label">CONNECTED WALLET:</div>
-                                <button class="btn-secondary" onclick="disconnectWallet()" style="padding: 5px 10px; font-size: 0.8em;">Disconnect</button>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                                <span id="walletIcon" style="font-size: 1.5em;">👻</span>
-                                <span id="walletType" style="color: #8bc; font-size: 0.9em;">Phantom</span>
-                            </div>
-                            <div class="value" id="walletAddress">-</div>
-                        </div>
 
                         <div class="balance-grid">
                             <div class="balance-item">

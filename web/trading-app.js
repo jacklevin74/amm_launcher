@@ -268,37 +268,85 @@ function loadWalletFromStorage() {
     }
 }
 
+// Modal functions
+function openWalletModal() {
+    document.getElementById('walletModal').classList.add('active');
+}
+
+function closeWalletModal() {
+    document.getElementById('walletModal').classList.remove('active');
+}
+
+function closeWalletModalOnOverlay(event) {
+    if (event.target.id === 'walletModal') {
+        closeWalletModal();
+    }
+}
+
+// Connect wallet and close modal
+async function connectPhantomAndClose() {
+    closeWalletModal();
+    await connectPhantom();
+}
+
+async function connectBackpackAndClose() {
+    closeWalletModal();
+    await connectBackpack();
+}
+
+async function connectX1AndClose() {
+    closeWalletModal();
+    await connectX1();
+}
+
+async function createWalletAndClose() {
+    closeWalletModal();
+    await createWallet();
+}
+
 // Update wallet UI
 function updateWalletUI() {
+    const walletIconMap = {
+        'phantom': '👻',
+        'backpack': '🎒',
+        'x1': '⚡',
+        'local': '🔑'
+    };
+    const walletNameMap = {
+        'phantom': 'Phantom',
+        'backpack': 'Backpack',
+        'x1': 'X1 Wallet',
+        'local': 'Local Wallet'
+    };
+
     if (!wallet) {
+        // Show connect button
+        document.getElementById('connectWalletBtn').style.display = 'flex';
+        document.getElementById('walletConnectedDisplay').style.display = 'none';
+
+        // Show "no wallet" message in panel
         document.getElementById('noWallet').style.display = 'block';
         document.getElementById('hasWallet').style.display = 'none';
         document.getElementById('swapBtn').disabled = true;
     } else {
-        document.getElementById('noWallet').style.display = 'none';
-        document.getElementById('hasWallet').style.display = 'block';
-        document.getElementById('walletAddress').textContent = wallet.publicKey.toString();
-        document.getElementById('swapBtn').disabled = false;
-
-        // Update wallet icon and type
-        const walletIconMap = {
-            'phantom': '👻',
-            'backpack': '🎒',
-            'x1': '⚡',
-            'local': '🔑'
-        };
-        const walletNameMap = {
-            'phantom': 'Phantom',
-            'backpack': 'Backpack',
-            'x1': 'X1 Wallet',
-            'local': 'Local Wallet'
-        };
+        // Hide connect button, show wallet info
+        document.getElementById('connectWalletBtn').style.display = 'none';
+        document.getElementById('walletConnectedDisplay').style.display = 'flex';
 
         const icon = walletIconMap[walletType] || '💼';
         const name = walletNameMap[walletType] || 'Unknown';
+        const address = wallet.publicKey.toString();
+        const shortAddress = address.slice(0, 4) + '...' + address.slice(-4);
 
-        document.getElementById('walletIcon').textContent = icon;
-        document.getElementById('walletType').textContent = name;
+        // Update header wallet display
+        document.getElementById('headerWalletIcon').textContent = icon;
+        document.getElementById('headerWalletType').textContent = name;
+        document.getElementById('headerWalletAddress').textContent = shortAddress;
+
+        // Show balance/position panel
+        document.getElementById('noWallet').style.display = 'none';
+        document.getElementById('hasWallet').style.display = 'block';
+        document.getElementById('swapBtn').disabled = false;
     }
 }
 
@@ -1151,6 +1199,13 @@ function readU64(data, offset) {
 window.addEventListener('load', init);
 
 // Expose functions to global scope
+window.openWalletModal = openWalletModal;
+window.closeWalletModal = closeWalletModal;
+window.closeWalletModalOnOverlay = closeWalletModalOnOverlay;
+window.connectPhantomAndClose = connectPhantomAndClose;
+window.connectBackpackAndClose = connectBackpackAndClose;
+window.connectX1AndClose = connectX1AndClose;
+window.createWalletAndClose = createWalletAndClose;
 window.createWallet = createWallet;
 window.connectPhantom = connectPhantom;
 window.connectBackpack = connectBackpack;
