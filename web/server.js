@@ -117,10 +117,11 @@ const fs = require('fs');
     req.on('data', chunk => { body += chunk.toString(); });
     req.on('end', () => {
       try {
-        const { amount } = JSON.parse(body);
+        const { amount, minXntOut } = JSON.parse(body);
         const poolAddress = poolConfig?.poolAddress || "";
+        const minXntOutParam = minXntOut !== undefined ? minXntOut : 0;
 
-        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/web-buy.ts ${amount} ${poolAddress}`;
+        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/web-buy.ts ${amount} ${poolAddress} ${minXntOutParam}`;
 
         exec(cmd, (error, stdout, stderr) => {
           if (error) {
@@ -397,10 +398,11 @@ const fs = require('fs');
     req.on('data', chunk => { body += chunk.toString(); });
     req.on('end', () => {
       try {
-        const { amount } = JSON.parse(body);
+        const { amount, minUsdcOut } = JSON.parse(body);
         const poolAddress = poolConfig?.poolAddress || "";
+        const minUsdcOutParam = minUsdcOut !== undefined ? minUsdcOut : 0;
 
-        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/web-sell.ts ${amount} ${poolAddress}`;
+        const cmd = `cd /Users/yakovlevin/dev/lottery_amm && ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json npx ts-node --transpile-only scripts/web-sell.ts ${amount} ${poolAddress} ${minUsdcOutParam}`;
 
         exec(cmd, (error, stdout, stderr) => {
           if (error) {

@@ -188,8 +188,9 @@ describe("E6 USDC Integration", () => {
     const usdcAmount = 1_000 * 10 ** USDC_DECIMALS; // 1,000 USDC (e6)
 
     // Buy XNT with USDC
+    // Note: Setting min_xnt_out to 0 for testing (no slippage check)
     await program.methods
-      .buy(new anchor.BN(usdcAmount))
+      .buy(new anchor.BN(usdcAmount), new anchor.BN(0))
       .accounts({
         pool: poolPda,
         poolXnt: poolXnt,
@@ -298,7 +299,7 @@ describe("E6 USDC Integration", () => {
     const usdcAmount = 100 * 10 ** USDC_DECIMALS; // 100 USDC
 
     await program.methods
-      .buy(new anchor.BN(usdcAmount))
+      .buy(new anchor.BN(usdcAmount), new anchor.BN(0))
       .accounts({
         pool: poolPda,
         poolXnt: poolXnt,
@@ -337,7 +338,7 @@ describe("E6 USDC Integration", () => {
 
     // Sell XNT for USDC
     await program.methods
-      .sell(new anchor.BN(xntAmount))
+      .sell(new anchor.BN(xntAmount), new anchor.BN(0))
       .accounts({
         seller: payer.publicKey,
         pool: poolPda,
@@ -386,7 +387,7 @@ describe("E6 USDC Integration", () => {
     const ceilingReserveBefore = await getAccount(provider.connection, ceilingReserveXnt);
 
     await program.methods
-      .buy(new anchor.BN(largeBuy))
+      .buy(new anchor.BN(largeBuy), new anchor.BN(0))
       .accounts({
         pool: poolPda,
         poolXnt: poolXnt,
@@ -433,7 +434,7 @@ describe("E6 USDC Integration", () => {
     // First, sell to bring price down from ceiling
     const initialSell = 500_000 * 10 ** XNT_DECIMALS; // 500K XNT
     await program.methods
-      .sell(new anchor.BN(initialSell))
+      .sell(new anchor.BN(initialSell), new anchor.BN(0))
       .accounts({
         seller: payer.publicKey,
         pool: poolPda,
@@ -462,7 +463,7 @@ describe("E6 USDC Integration", () => {
       // Buy
       const buyAmount = 50_000 * 10 ** USDC_DECIMALS; // 50K USDC
       await program.methods
-        .buy(new anchor.BN(buyAmount))
+        .buy(new anchor.BN(buyAmount), new anchor.BN(0))
         .accounts({
           pool: poolPda,
           poolXnt: poolXnt,
@@ -490,7 +491,7 @@ describe("E6 USDC Integration", () => {
       // Sell
       const sellAmount = 30_000 * 10 ** XNT_DECIMALS; // 30K XNT
       await program.methods
-        .sell(new anchor.BN(sellAmount))
+        .sell(new anchor.BN(sellAmount), new anchor.BN(0))
         .accounts({
           seller: payer.publicKey,
           pool: poolPda,
@@ -531,7 +532,7 @@ describe("E6 USDC Integration", () => {
     console.log(`Step 1: Buying XNT with ${buyAmount.toLocaleString()} USDC to accumulate real USDC...`);
 
     await program.methods
-      .buy(new anchor.BN(buyAmount))
+      .buy(new anchor.BN(buyAmount), new anchor.BN(0))
       .accounts({
         buyer: payer.publicKey,
         pool: poolPda,

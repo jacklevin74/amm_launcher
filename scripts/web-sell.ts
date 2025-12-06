@@ -5,15 +5,16 @@ import { TOKEN_PROGRAM_ID, NATIVE_MINT, getOrCreateAssociatedTokenAccount, creat
 import fs from 'fs';
 
 async function main() {
-  const [amountStr, poolAddressStr] = process.argv.slice(2);
+  const [amountStr, poolAddressStr, minUsdcOutStr] = process.argv.slice(2);
 
   if (!amountStr || !poolAddressStr) {
-    console.log(JSON.stringify({ success: false, error: 'Usage: web-sell.ts <amount> <pool_address>' }));
+    console.log(JSON.stringify({ success: false, error: 'Usage: web-sell.ts <amount> <pool_address> [min_usdc_out]' }));
     process.exit(1);
   }
 
   const amount = new anchor.BN(amountStr);
   const poolAddress = new PublicKey(poolAddressStr);
+  const minUsdcOut = minUsdcOutStr ? new anchor.BN(minUsdcOutStr) : new anchor.BN(0);
   const programId = new PublicKey('2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF');
 
   const connection = new Connection('http://localhost:8899', 'confirmed');
@@ -41,11 +42,13 @@ async function main() {
   const traderXnt = await getOrCreateAssociatedTokenAccount(connection, mainWallet, xntMint, trader.publicKey);
   const traderUsdc = await getOrCreateAssociatedTokenAccount(connection, mainWallet, usdcMint, trader.publicKey);
 
-  // Build sell instruction data: discriminator (8 bytes) + amount (8 bytes)
+  // Build sell instruction data: discriminator (8 bytes) + xnt_amount (8 bytes) + min_usdc_out (8 bytes)
   const discriminator = Buffer.from([51, 230, 133, 164, 1, 127, 131, 173]); // sell instruction discriminator
   const amountBuffer = Buffer.alloc(8);
   amountBuffer.writeBigUInt64LE(BigInt(amount.toString()), 0);
-  const data = Buffer.concat([discriminator, amountBuffer]);
+  const minUsdcOutBuffer = Buffer.alloc(8);
+  minUsdcOutBuffer.writeBigUInt64LE(BigInt(minUsdcOut.toString()), 0);
+  const data = Buffer.concat([discriminator, amountBuffer, minUsdcOutBuffer]);
 
   // Build sell instruction
   const sellInstruction = new TransactionInstruction({

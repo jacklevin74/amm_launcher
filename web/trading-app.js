@@ -44,6 +44,7 @@ let totalUsdcReceived = 0;
 let totalXntSold = 0;
 let priceUpdateInterval = null;
 let tradingMode = 'sell_usdc_for_sol'; // Trading mode: buy_usdc_with_sol, sell_usdc_for_sol (default to buying XNT)
+let slippageTolerance = 0.5; // Default 0.5% slippage tolerance
 
 // Initialize connection
 async function init() {
@@ -472,10 +473,14 @@ function updateQuote() {
             const newPrice = newUsdcReserve_s / newXntReserve_s;
             const priceImpact = ((newPrice / poolData.price) - 1) * 100;
 
+            // Calculate minimum output with slippage tolerance
+            const minUsdcOut = usdcOut_scaled * (1 - slippageTolerance / 100);
+
             document.getElementById('quoteReceive').textContent = usdcOut_scaled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('quotePrice').textContent = '$' + effectivePrice.toFixed(6);
             document.getElementById('quotePriceImpact').textContent = (priceImpact >= 0 ? '+' : '') + priceImpact.toFixed(2) + '%';
             document.getElementById('quoteNewPrice').textContent = '$' + newPrice.toFixed(6);
+            document.getElementById('quoteMinOutput').textContent = minUsdcOut.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' USDC';
             break;
 
         case 'sell_usdc_for_sol':
@@ -498,10 +503,14 @@ function updateQuote() {
             const newPrice2 = newUsdcReserve_scaled / newXntReserve_scaled;
             const priceImpact2 = ((newPrice2 / poolData.price) - 1) * 100;
 
+            // Calculate minimum output with slippage tolerance
+            const minXntOut = xntOut_scaled * (1 - slippageTolerance / 100);
+
             document.getElementById('quoteReceive').textContent = xntOut_scaled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('quotePrice').textContent = '$' + effectivePrice2.toFixed(6);
             document.getElementById('quotePriceImpact').textContent = (priceImpact2 >= 0 ? '+' : '') + priceImpact2.toFixed(2) + '%';
             document.getElementById('quoteNewPrice').textContent = '$' + newPrice2.toFixed(6);
+            document.getElementById('quoteMinOutput').textContent = minXntOut.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' XNT';
             break;
     }
 }
@@ -509,6 +518,27 @@ function updateQuote() {
 // Set amount
 function setAmount(amount) {
     document.getElementById('tradeAmount').value = amount;
+    updateQuote();
+}
+
+// Set slippage tolerance
+function setSlippage(percentage) {
+    slippageTolerance = percentage;
+    document.getElementById('customSlippage').value = percentage;
+
+    // Update button highlights
+    ['0.1', '0.5', '1', '2', '5'].forEach(val => {
+        const btn = document.getElementById(`slippage-${val}`);
+        if (btn) {
+            if (parseFloat(val) === percentage) {
+                btn.style.background = 'rgba(102, 170, 187, 0.15)';
+            } else {
+                btn.style.background = 'rgba(102, 170, 187, 0.05)';
+            }
+        }
+    });
+
+    // Update quote to reflect new slippage
     updateQuote();
 }
 
@@ -640,13 +670,28 @@ async function executeSellSOLForUSDC() {
     try {
         document.getElementById('swapBtn').disabled = true;
 
+        // Calculate minimum USDC output with slippage protection
+        const xntIn_scaled = solAmount;
+        const xntReserve_s = poolData.xntReserve / 1e9;
+        const usdcReserve_s = poolData.usdcReserve / 1e9;
+        const k_scaled = xntReserve_s * usdcReserve_s;
+        const newXntReserve_s = xntReserve_s + xntIn_scaled;
+        const newUsdcReserve_s = k_scaled / newXntReserve_s;
+        const usdcOut_scaled = usdcReserve_s - newUsdcReserve_s;
+        const minUsdcOut = usdcOut_scaled * (1 - slippageTolerance / 100);
+        const minUsdcOutWithDecimals = Math.floor(minUsdcOut * 1e6);
+
         // Sell wSOL (XNT) for USDC on AMM
-        showStatus(`Selling ${solAmount} wSOL for USDC...`, 'info');
+        showStatus(`Selling ${solAmount} wSOL for USDC (slippage: ${slippageTolerance}%)...`, 'info');
+        addLog(`Selling ${solAmount} wSOL for USDC (min output: ${minUsdcOut.toFixed(2)} USDC)...`, 'info');
         const xntWithDecimals = Math.floor(solAmount * 1e9);
         const sellResponse = await fetch('/api/sell', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: xntWithDecimals })
+            body: JSON.stringify({
+                amount: xntWithDecimals,
+                minUsdcOut: minUsdcOutWithDecimals
+            })
         });
         const sellResult = await sellResponse.json();
         if (!sellResult.success) throw new Error('Sell failed: ' + sellResult.error);
@@ -679,15 +724,29 @@ async function executeBuySOLWithUSDC() {
     try {
         document.getElementById('swapBtn').disabled = true;
 
+        // Calculate minimum XNT output with slippage protection
+        const usdcIn_scaled = usdcAmount;
+        const xntReserve_scaled = poolData.xntReserve / 1e9;
+        const usdcReserve_scaled = poolData.usdcReserve / 1e9;
+        const k2_scaled = xntReserve_scaled * usdcReserve_scaled;
+        const newUsdcReserve_scaled = usdcReserve_scaled + usdcIn_scaled;
+        const newXntReserve_scaled = k2_scaled / newUsdcReserve_scaled;
+        const xntOut_scaled = xntReserve_scaled - newXntReserve_scaled;
+        const minXntOut = xntOut_scaled * (1 - slippageTolerance / 100);
+        const minXntOutWithDecimals = Math.floor(minXntOut * 1e9);
+
         // Buy XNT (wSOL) with USDC on AMM
-        showStatus(`Buying wSOL with ${usdcAmount} USDC...`, 'info');
-        addLog(`Buying XNT (wSOL) with ${usdcAmount} USDC on AMM...`, 'info');
+        showStatus(`Buying wSOL with ${usdcAmount} USDC (slippage: ${slippageTolerance}%)...`, 'info');
+        addLog(`Buying XNT (wSOL) with ${usdcAmount} USDC on AMM (min output: ${minXntOut.toFixed(2)} XNT)...`, 'info');
         // IMPORTANT: USDC is e6 (6 decimals), convert user input to atomic units
         const usdcWithDecimals = Math.floor(usdcAmount * 1e6);
         const buyResponse = await fetch('/api/buy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: usdcWithDecimals })
+            body: JSON.stringify({
+                amount: usdcWithDecimals,
+                minXntOut: minXntOutWithDecimals
+            })
         });
         const buyResult = await buyResponse.json();
         if (!buyResult.success) throw new Error('Buy failed: ' + buyResult.error);
@@ -818,9 +877,12 @@ window.addEventListener('load', init);
 window.createWallet = createWallet;
 window.airdropUSDC = airdropUSDC;
 window.setAmount = setAmount;
+window.setSlippage = setSlippage;
 window.updateQuote = updateQuote;
 window.executeBuy = executeBuy;
 window.executeSell = executeSell;
 window.executeSwap = executeSwap;
 window.toggleSwapDirection = toggleSwapDirection;
 window.resetTrading = resetTrading;
+window.handleTradingModeChange = handleTradingModeChange;
+window.clearLog = clearLog;

@@ -600,6 +600,26 @@
                         </select>
                     </div>
 
+                    <!-- Slippage Settings -->
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(102, 170, 187, 0.05); border: 1px solid #6ab;">
+                        <div style="margin-bottom: 10px; color: #8bc; font-weight: bold;">SLIPPAGE TOLERANCE:</div>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <button class="quick-amount-btn" onclick="setSlippage(0.1)" id="slippage-0.1">0.1%</button>
+                            <button class="quick-amount-btn" onclick="setSlippage(0.5)" id="slippage-0.5" style="background: rgba(102, 170, 187, 0.15);">0.5%</button>
+                            <button class="quick-amount-btn" onclick="setSlippage(1)" id="slippage-1">1%</button>
+                            <button class="quick-amount-btn" onclick="setSlippage(2)" id="slippage-2">2%</button>
+                            <button class="quick-amount-btn" onclick="setSlippage(5)" id="slippage-5">5%</button>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label style="color: #8bc; font-size: 0.9em; white-space: nowrap;">Custom:</label>
+                            <input type="number" id="customSlippage" step="0.1" min="0.1" max="50" value="0.5" style="flex: 1; padding: 8px; background: rgba(102, 170, 187, 0.1); border: 1px solid #6ab; color: #6ab; font-family: 'Courier New', monospace; font-size: 0.9em;" oninput="setSlippage(parseFloat(this.value))">
+                            <span style="color: #8bc; font-size: 0.9em;">%</span>
+                        </div>
+                        <div style="margin-top: 8px; font-size: 0.8em; color: #8bc;">
+                            ℹ️ Protects you from price changes during transaction execution
+                        </div>
+                    </div>
+
                     <!-- Amount Input -->
                     <div class="token-input-card">
                         <div class="token-input-header">
@@ -651,6 +671,10 @@
                             <div class="detail-row" id="newPriceRow" style="display: flex;">
                                 <span>New Pool Price</span>
                                 <span id="quoteNewPrice">-</span>
+                            </div>
+                            <div class="detail-row" id="minOutputRow" style="display: flex; padding-top: 8px; border-top: 1px solid rgba(102, 170, 187, 0.2); margin-top: 8px;">
+                                <span style="color: #ba9;">Minimum Received</span>
+                                <span id="quoteMinOutput" style="color: #ba9; font-weight: 600;">-</span>
                             </div>
                         </div>
                     </div>
