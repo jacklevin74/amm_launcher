@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Audit Report - XNT Bonding Curve AMM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0e1a;
+            color: #6ab;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            padding: 30px;
+            border: 2px solid #6ab;
+            margin-bottom: 30px;
+            background: rgba(102, 170, 187, 0.05);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            color: #6ab;
+        }
+
+        .header .meta {
+            font-size: 0.9em;
+            color: #8bc;
+            opacity: 0.9;
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            flex: 1;
+            min-width: 120px;
+            padding: 12px;
+            background: rgba(102, 170, 187, 0.05);
+            border: 1px solid #6ab;
+            color: #6ab;
+            text-decoration: none;
+            text-align: center;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            font-size: 0.8em;
+        }
+
+        .nav a:hover {
+            background: rgba(102, 170, 187, 0.15);
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .summary-card {
+            border: 2px solid;
+            padding: 20px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .summary-card.critical {
+            border-color: #ff3366;
+            background: rgba(255, 51, 102, 0.05);
+        }
+
+        .summary-card.high {
+            border-color: #ff9933;
+            background: rgba(255, 153, 51, 0.05);
+        }
+
+        .summary-card.medium {
+            border-color: #ffcc33;
+            background: rgba(255, 204, 51, 0.05);
+        }
+
+        .summary-card.low {
+            border-color: #33cc99;
+            background: rgba(51, 204, 153, 0.05);
+        }
+
+        .summary-card .number {
+            font-size: 3em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .summary-card .label {
+            font-size: 0.9em;
+            text-transform: uppercase;
+            opacity: 0.9;
+        }
+
+        .section {
+            border: 1px solid #6ab;
+            padding: 25px;
+            margin-bottom: 25px;
+            background: rgba(102, 170, 187, 0.02);
+        }
+
+        .section h2 {
+            color: #8bc;
+            border-bottom: 2px solid #6ab;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .issue {
+            border-left: 4px solid;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .issue.critical {
+            border-color: #ff3366;
+        }
+
+        .issue.high {
+            border-color: #ff9933;
+        }
+
+        .issue.medium {
+            border-color: #ffcc33;
+        }
+
+        .issue.low {
+            border-color: #33cc99;
+        }
+
+        .issue h3 {
+            color: #6ab;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .issue .severity {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 3px;
+            font-size: 0.75em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .severity.critical {
+            background: #ff3366;
+            color: #fff;
+        }
+
+        .severity.high {
+            background: #ff9933;
+            color: #000;
+        }
+
+        .severity.medium {
+            background: #ffcc33;
+            color: #000;
+        }
+
+        .severity.low {
+            background: #33cc99;
+            color: #000;
+        }
+
+        .issue .location {
+            font-size: 0.85em;
+            color: #8bc;
+            margin-bottom: 15px;
+            font-style: italic;
+        }
+
+        .code-block {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #6ab;
+            padding: 15px;
+            margin: 15px 0;
+            overflow-x: auto;
+            font-size: 0.85em;
+        }
+
+        .code-block pre {
+            margin: 0;
+            color: #8bc;
+        }
+
+        .recommendation {
+            background: rgba(102, 170, 187, 0.1);
+            border: 1px solid #6ab;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .recommendation h4 {
+            color: #8bc;
+            margin-bottom: 10px;
+        }
+
+        .checklist {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .checklist li {
+            padding: 8px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .checklist li:before {
+            content: "☑";
+            position: absolute;
+            left: 0;
+            color: #6ab;
+        }
+
+        .alert {
+            padding: 15px;
+            margin: 20px 0;
+            border: 2px solid #ff3366;
+            background: rgba(255, 51, 102, 0.1);
+            color: #ff3366;
+            font-weight: bold;
+        }
+
+        .toc {
+            background: rgba(102, 170, 187, 0.05);
+            border: 1px solid #6ab;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .toc h3 {
+            color: #8bc;
+            margin-bottom: 15px;
+        }
+
+        .toc ul {
+            list-style: none;
+            padding-left: 20px;
+        }
+
+        .toc a {
+            color: #6ab;
+            text-decoration: none;
+            padding: 5px 0;
+            display: block;
+        }
+
+        .toc a:hover {
+            color: #8bc;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            border-top: 1px solid #6ab;
+            margin-top: 50px;
+            opacity: 0.7;
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔒 SECURITY AUDIT REPORT</h1>
+            <div class="meta">
+                <div><strong>Program:</strong> XNT Bonding Curve AMM</div>
+                <div><strong>Audit Date:</strong> December 5, 2025</div>
+                <div><strong>Program ID:</strong> 2zKpM4k4kp7qRNvBVzkEAAt8DU8t1vpAfzsRagha4NNF</div>
+            </div>
+        </div>
+
+        <div class="nav">
+            <a href="/">TRADING</a>
+            <a href="/analytics.html">ANALYTICS</a>
+            <a href="/wrap.html">WRAP SOL</a>
+            <a href="/admin.html">ADMIN</a>
+            <a href="/test-results.html">TEST RESULTS</a>
+            <a href="/security-audit.html" style="background: rgba(102, 170, 187, 0.15);">SECURITY AUDIT</a>
+        </div>
+
+        <div class="alert">
+            ⚠️ CRITICAL VULNERABILITIES IDENTIFIED - MAINNET DEPLOYMENT NOT RECOMMENDED WITHOUT FIXES
+        </div>
+
+        <div class="summary-grid">
+            <div class="summary-card critical">
+                <div class="number">5</div>
+                <div class="label">Critical Issues</div>
+            </div>
+            <div class="summary-card high">
+                <div class="number">4</div>
+                <div class="label">High Issues</div>
+            </div>
+            <div class="summary-card medium">
+                <div class="number">6</div>
+                <div class="label">Medium Issues</div>
+            </div>
+            <div class="summary-card low">
+                <div class="number">5</div>
+                <div class="label">Low Issues</div>
+            </div>
+        </div>
+
+        <div class="toc">
+            <h3>Table of Contents</h3>
+            <ul>
+                <li><a href="#critical">Critical Severity Issues (5)</a></li>
+                <li><a href="#high">High Severity Issues (4)</a></li>
+                <li><a href="#medium">Medium Severity Issues (6)</a></li>
+                <li><a href="#low">Low Severity Issues (5)</a></li>
+                <li><a href="#recommendations">Recommendations Summary</a></li>
+                <li><a href="#conclusion">Conclusion</a></li>
+            </ul>
+        </div>
+
+        <div class="section" id="critical">
+            <h2>🔴 CRITICAL SEVERITY ISSUES</h2>
+
+            <div class="issue critical">
+                <h3>1. Missing Token Account Mint Validation</h3>
+                <span class="severity critical">CRITICAL</span>
+                <div class="location">Location: lib.rs:1031-1036, 1083-1088</div>
+
+                <p>In <code>Buy</code> and <code>Sell</code> contexts, user token accounts don't validate that they match the expected mints. An attacker could provide token accounts with wrong mints.</p>
+
+                <div class="code-block">
+                    <pre>// Buy context - NO mint validation ❌
+#[account(mut)]
+pub buyer_usdc: Account&lt;'info, TokenAccount&gt;,  // No constraint
+#[account(mut)]
+pub buyer_xnt: Account&lt;'info, TokenAccount&gt;,   // No constraint</pre>
+                </div>
+
+                <div class="recommendation">
+                    <h4>Recommendation:</h4>
+                    <div class="code-block">
+                        <pre>#[account(
+    mut,
+    constraint = buyer_usdc.mint == pool.usdc_mint @ ErrorCode::InvalidMint
+)]
+pub buyer_usdc: Account&lt;'info, TokenAccount&gt;,
+
+#[account(
+    mut,
+    constraint = buyer_xnt.mint == pool.xnt_mint @ ErrorCode::InvalidMint
+)]
+pub buyer_xnt: Account&lt;'info, TokenAccount&gt;,</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="issue critical">
+                <h3>2. Missing Token Account Ownership Validation</h3>
+                <span class="severity critical">CRITICAL</span>
+                <div class="location">Location: lib.rs:1005-1054 (Buy), 1057-1098 (Sell), 1261-1306 (AddLiquidity)</div>
+
+                <p>The program doesn't verify that user token accounts belong to the signer. An attacker could provide someone else's token account and steal their funds.</p>
+
+                <div class="recommendation">
+                    <h4>Recommendation:</h4>
+                    <div class="code-block">
+                        <pre>#[account(
+    mut,
+    constraint = buyer_xnt.owner == buyer.key() @ ErrorCode::InvalidOwner,
+    constraint = buyer_xnt.mint == pool.xnt_mint @ ErrorCode::InvalidMint
+)]
+pub buyer_xnt: Account&lt;'info, TokenAccount&gt;,</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="issue critical">
+                <h3>3. Integer Division Precision Loss in Price Calculations</h3>
+                <span class="severity critical">CRITICAL</span>
+                <div class="location">Location: lib.rs:130, 186, 276, 283, 412-413, 663-664</div>
+
+                <p>Price calculations use integer division which loses precision. This can be exploited for price manipulation or cause users to receive incorrect amounts.</p>
+
+                <div class="code-block">
+                    <pre>// Precision loss ❌
+let price_before = pool.usdc_reserve / pool.xnt_reserve;  // Truncates
+
+// Rounding down hurts users ❌
+let usdc_out_transfer = if pool.usdc_decimals == 6 {
+    usdc_out / 1000  // User loses fractional amounts
+} else {
+    usdc_out
+};</pre>
+                </div>
+
+                <div class="recommendation">
+                    <h4>Recommendation:</h4>
+                    <div class="code-block">
+                        <pre>// Better approach for price calculation
+let price_before = (pool.usdc_reserve as u128)
+    .checked_mul(1_000_000)
+    .unwrap()
+    .checked_div(pool.xnt_reserve as u128)
+    .unwrap();
+
+// Round UP for user payouts
+let usdc_out_transfer = if pool.usdc_decimals == 6 {
+    (usdc_out + 999) / 1000  // Round up
+} else {
+    usdc_out
+};</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="issue critical">
+                <h3>4. Ceiling Reserve Drain via Repeated Defense Triggers</h3>
+                <span class="severity critical">CRITICAL</span>
+                <div class="location">Location: lib.rs:144-190</div>
+
+                <p>The ceiling defense mechanism can be triggered repeatedly without cooldown. An attacker could execute multiple small buys to drain the entire ceiling reserve.</p>
+
+                <p><strong>Attack Scenario:</strong></p>
+                <ol style="margin-left: 20px; margin-top: 10px;">
+                    <li>Attacker executes small USDC buys that push price just above ceiling</li>
+                    <li>Each buy triggers XNT injection from ceiling reserve</li>
+                    <li>Repeat until ceiling reserve is empty</li>
+                    <li>Protocol can no longer defend price ceiling</li>
+                </ol>
+
+                <div class="recommendation">
+                    <h4>Recommendation:</h4>
+                    <ul class="checklist">
+                        <li>Implement cooldown period between ceiling defense activations</li>
+                        <li>Add maximum injection amount per block/time period</li>
+                        <li>Require minimum trade size to trigger defense</li>
+                        <li>Add reserve threshold checks before activation</li>
+                    </ul>
+                    <div class="code-block">
+                        <pre>pub struct Pool {
+    // ... existing fields
+    pub last_ceiling_defense: i64,  // Timestamp of last defense
+    pub defense_cooldown: i64,      // Minimum seconds between defenses
+}
+
+// In buy instruction:
+let clock = Clock::get()?;
+if price_after > pool.price_ceiling {
+    require!(
+        clock.unix_timestamp - pool.last_ceiling_defense >= pool.defense_cooldown,
+        ErrorCode::DefenseCooldownActive
+    );
+
+    // Perform ceiling defense...
+    pool.last_ceiling_defense = clock.unix_timestamp;
+}</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="issue critical">
+                <h3>5. Rounding Error Exploitation in E6/E9 Conversion</h3>
+                <span class="severity critical">CRITICAL</span>
+                <div class="location">Location: lib.rs:270</div>
+
+                <p>Converting from E9 to E6 for USDC uses truncating division. Users lose fractional amounts on every sell transaction.</p>
+
+                <p><strong>Impact Example:</strong></p>
+                <ul style="margin-left: 20px; margin-top: 10px;">
+                    <li>User sells 1,999 XNT for 1,999,999 (e9) USDC</li>
+                    <li>After conversion: 1,999,999 / 1000 = 1,999 (e6) USDC</li>
+                    <li>User loses 999 units (0.000999 USDC) per transaction</li>
+                    <li>Over many transactions, this adds up significantly</li>
+                </ul>
+
+                <div class="recommendation">
+                    <h4>Recommendation:</h4>
+                    <div class="code-block">
+                        <pre>let usdc_out_transfer = if pool.usdc_decimals == 6 {
+    // Round up to favor user
+    (usdc_out + 999) / 1000
+} else {
+    usdc_out
+};</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section" id="high">
+            <h2>🟠 HIGH SEVERITY ISSUES</h2>
+
+            <div class="issue high">
+                <h3>6. Authority Centralization Risk</h3>
+                <span class="severity high">HIGH</span>
+                <div class="location">Location: Multiple functions (deposit_xnt, withdraw_xnt, withdraw_usdc, etc.)</div>
+
+                <p>Single authority address controls all privileged functions with no timelock, multisig, or governance mechanism.</p>
+
+                <p><strong>Authority Can:</strong></p>
+                <ul style="margin-left: 20px; margin-top: 10px;">
+                    <li>Manipulate price through deposits/withdrawals</li>
+                    <li>Drain ceiling reserve</li>
+                    <li>Extract all USDC from pool (via withdraw_usdc_price_neutral)</li>
+                </ul>
+
+                <div class="recommendation">
+                    <h4>Recommendations:</h4>
+                    <ul class="checklist">
+                        <li>Implement multisig requirement for authority (e.g., Squads)</li>
+                        <li>Add timelock for sensitive operations</li>
+                        <li>Consider governance token for decentralization</li>
+                        <li>Add maximum withdrawal limits per time period</li>
+                        <li>Implement pausable guardian with different key than authority</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="issue high">
+                <h3>7. No Trading Fees = No LP Incentive</h3>
+                <span class="severity high">HIGH</span>
+                <div class="location">Location: lib.rs:92-236 (buy/sell functions)</div>
+
+                <p>The AMM has zero trading fees, meaning no revenue for liquidity providers and no economic incentive to provide liquidity. Standard AMMs charge 0.3% fee (Uniswap model).</p>
+
+                <div class="recommendation">
+                    <h4>Recommendation:</h4>
+                    <div class="code-block">
+                        <pre>pub struct Pool {
+    // ... existing fields
+    pub fee_bps: u16,  // Fee in basis points (30 = 0.3%)
+}
+
+// In buy instruction:
+let fee_amount = (usdc_normalized as u128)
+    .checked_mul(pool.fee_bps as u128)
+    .ok_or(ErrorCode::MathOverflow)?
+    .checked_div(10000)
+    .ok_or(ErrorCode::MathOverflow)? as u64;</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="issue high">
+                <h3>8. State Updates Not Atomic</h3>
+                <span class="severity high">HIGH</span>
+                <div class="location">Location: lib.rs:220-233 (buy), 370-377 (sell)</div>
+
+                <p>Reserve updates and k updates happen at different times. If a transaction fails between updates, pool state becomes inconsistent.</p>
+
+                <div class="recommendation">
+                    <h4>Recommendation:</h4>
+                    <div class="code-block">
+                        <pre>// Calculate all values first
+let new_xnt = final_xnt_reserve;
+let new_usdc = new_usdc_reserve as u64;
+let new_k = (new_xnt as u128).checked_mul(new_usdc as u128)?;
+
+// Invariant check
+require!(new_k > 0, ErrorCode::InvalidState);
+require!(new_xnt > 0 && new_usdc > 0, ErrorCode::InvalidState);
+
+// Atomic update
+pool.xnt_reserve = new_xnt;
+pool.usdc_reserve = new_usdc;
+pool.k = new_k;
+pool.trade_count += 1;</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="issue high">
+                <h3>9. Excessive Slippage Tolerance in add_liquidity</h3>
+                <span class="severity high">HIGH</span>
+                <div class="location">Location: lib.rs:850-856</div>
+
+                <p>The 1% slippage tolerance is too generous and can be exploited via sandwich attacks.</p>
+
+                <div class="recommendation">
+                    <h4>Recommendation: Allow user-specified slippage (max 1%)</h4>
+                    <div class="code-block">
+                        <pre>pub fn add_liquidity(
+    ctx: Context&lt;AddLiquidity&gt;,
+    xnt_amount: u64,
+    usdc_amount: u64,
+    min_liquidity: u64,
+    max_slippage_bps: u16,  // In basis points
+) -> Result&lt;()&gt; {
+    require!(max_slippage_bps <= 100, ErrorCode::SlippageTooHigh);  // Max 1%
+
+    let slippage_tolerance = (expected_usdc as u128)
+        .checked_mul(max_slippage_bps as u128)
+        .unwrap()
+        .checked_div(10000)
+        .unwrap() as u64;
+}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section" id="medium">
+            <h2>🟡 MEDIUM SEVERITY ISSUES</h2>
+
+            <div class="issue medium">
+                <h3>10. No Emergency Pause Mechanism</h3>
+                <span class="severity medium">MEDIUM</span>
+                <p>If an exploit is discovered, there's no way to pause trading while fixing the issue.</p>
+            </div>
+
+            <div class="issue medium">
+                <h3>11. Missing Checks-Effects-Interactions Pattern</h3>
+                <span class="severity medium">MEDIUM</span>
+                <p>State updates happen AFTER external token transfers. While Solana doesn't have Ethereum-style reentrancy, following CEI pattern is best practice.</p>
+            </div>
+
+            <div class="issue medium">
+                <h3>12. Unchecked Magic Numbers in Defense Buffers</h3>
+                <span class="severity medium">MEDIUM</span>
+                <p>Defense buffers use hardcoded 1 XNT value with no justification. Should be configurable parameter.</p>
+            </div>
+
+            <div class="issue medium">
+                <h3>13. View Function Returns Result Instead of Pure Value</h3>
+                <span class="severity medium">MEDIUM</span>
+                <p><code>get_max_sellable_xnt</code> is a view function but returns Result. View functions should be infallible.</p>
+            </div>
+
+            <div class="issue medium">
+                <h3>14. LP Position Initialization Logic Redundant</h3>
+                <span class="severity medium">MEDIUM</span>
+                <p>Manual check for Pubkey::default() is redundant with Anchor's init_if_needed.</p>
+            </div>
+
+            <div class="issue medium">
+                <h3>15. No Events for Critical Operations</h3>
+                <span class="severity medium">MEDIUM</span>
+                <p>Program uses msg! logging but doesn't emit proper events, making off-chain indexing and monitoring difficult.</p>
+            </div>
+        </div>
+
+        <div class="section" id="low">
+            <h2>🟢 LOW SEVERITY ISSUES</h2>
+
+            <div class="issue low">
+                <h3>16. Deprecated Field in Struct</h3>
+                <span class="severity low">LOW</span>
+                <p>is_graduated field is deprecated but kept for compatibility. Should be documented and removed in next major version.</p>
+            </div>
+
+            <div class="issue low">
+                <h3>17. Price Floor Only Checked in deposit_xnt</h3>
+                <span class="severity low">LOW</span>
+                <p>Price floor check only happens in deposit_xnt, not in deposit_xnt_price_neutral. Inconsistent validation.</p>
+            </div>
+
+            <div class="issue low">
+                <h3>18. Division by Zero Not Fully Protected</h3>
+                <span class="severity low">LOW</span>
+                <p>Should validate virtual_usdc_amount > 0 in initialization.</p>
+            </div>
+
+            <div class="issue low">
+                <h3>19. No Minimum Trade Size</h3>
+                <span class="severity low">LOW</span>
+                <p>No minimum trade size allows dust trades that could be used for griefing or price manipulation.</p>
+            </div>
+
+            <div class="issue low">
+                <h3>20. Integer Square Root Edge Cases</h3>
+                <span class="severity low">LOW</span>
+                <p>Custom integer_sqrt implementation should be tested for edge cases (u128::MAX, etc.).</p>
+            </div>
+        </div>
+
+        <div class="section" id="recommendations">
+            <h2>📋 RECOMMENDATIONS SUMMARY</h2>
+
+            <h3 style="color: #ff3366; margin-top: 20px;">Immediate Actions (Before Mainnet)</h3>
+            <ul class="checklist">
+                <li>Add mint validation to all token accounts</li>
+                <li>Add ownership validation to user token accounts</li>
+                <li>Fix rounding errors - round up for user payouts</li>
+                <li>Implement cooldown for ceiling/floor defense</li>
+                <li>Add trading fees (0.3% standard)</li>
+                <li>Implement multisig authority</li>
+            </ul>
+
+            <h3 style="color: #ff9933; margin-top: 20px;">Important Improvements</h3>
+            <ul class="checklist">
+                <li>Add emergency pause mechanism</li>
+                <li>Follow checks-effects-interactions pattern</li>
+                <li>Emit events for all critical operations</li>
+                <li>Add minimum trade size requirements</li>
+                <li>Improve precision in price calculations</li>
+                <li>Add comprehensive unit tests</li>
+            </ul>
+
+            <h3 style="color: #ffcc33; margin-top: 20px;">Nice to Have</h3>
+            <ul class="checklist">
+                <li>Implement timelock for authority operations</li>
+                <li>Add governance mechanism</li>
+                <li>Document all magic numbers</li>
+                <li>Create migration plan for deprecated fields</li>
+                <li>Add monitoring and alerting infrastructure</li>
+            </ul>
+        </div>
+
+        <div class="section" id="conclusion">
+            <h2>🎯 CONCLUSION</h2>
+
+            <p style="margin-bottom: 20px;">The bonding curve AMM implementation has good structure and interesting price defense mechanisms, but <strong>requires significant security improvements before mainnet deployment</strong>.</p>
+
+            <h3 style="color: #ff3366; margin-bottom: 15px;">Most Critical Issues:</h3>
+            <ol style="margin-left: 20px; line-height: 1.8;">
+                <li>Missing account validations (CRITICAL)</li>
+                <li>Precision loss in calculations (CRITICAL)</li>
+                <li>Ceiling reserve drain vulnerability (CRITICAL)</li>
+                <li>Centralized authority control (HIGH)</li>
+                <li>No trading fees (HIGH)</li>
+            </ol>
+
+            <div style="margin-top: 25px; padding: 20px; background: rgba(255, 51, 102, 0.1); border: 2px solid #ff3366;">
+                <p><strong>Estimated time to address critical issues:</strong> 2-3 weeks</p>
+                <p><strong>Recommendation:</strong> Full professional security audit before mainnet deployment</p>
+            </div>
+
+            <div style="margin-top: 25px; padding: 20px; background: rgba(102, 170, 187, 0.1); border: 1px solid #6ab;">
+                <p><strong>Auditor Note:</strong> This audit is comprehensive but not exhaustive. A professional third-party audit is strongly recommended before handling real user funds.</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Security Audit Report Generated: December 5, 2025</p>
+            <p>XNT Bonding Curve AMM - Solana Program</p>
+            <p><a href="/SECURITY_AUDIT.md" style="color: #6ab;">Download Markdown Version</a></p>
+        </div>
+    </div>
+</body>
+</html>
