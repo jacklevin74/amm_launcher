@@ -74,6 +74,9 @@ pub mod bonding_curve {
         pool.price_ceiling = price_ceiling;
         pool.ceiling_reserve_bump = ctx.bumps.ceiling_reserve_pda;
         pool.price_floor = price_floor;
+        pool.last_ceiling_defense = 0;  // Never activated
+        pool.last_floor_defense = 0;    // Never activated
+        pool.defense_cooldown = 60;     // Default: 60 seconds cooldown
 
         msg!("Pool initialized with {} XNT (single-sided)", xnt_amount);
         msg!("Virtual USDC reserve: {} (normalized to e9 for price calculation)", virtual_usdc_normalized);
@@ -127,14 +130,24 @@ pub mod bonding_curve {
         require!(xnt_out > 0, ErrorCode::ZeroOutput);
 
         // Calculate effective price (with proper decimal handling)
-        let price_before = pool.usdc_reserve / pool.xnt_reserve;
+        // SECURITY FIX: Use high precision arithmetic (multiply first, divide last)
+        let price_before = ((pool.usdc_reserve as u128)
+            .checked_mul(1_000_000)
+            .ok_or(ErrorCode::MathOverflow)?
+            .checked_div(pool.xnt_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?) as u64;
         // Calculate price_after with 6 decimal precision: (usdc * 1e6) / xnt
         let price_after = ((new_usdc_reserve as u128)
             .checked_mul(1_000_000)
             .ok_or(ErrorCode::MathOverflow)?
             .checked_div(new_xnt_reserve)
             .ok_or(ErrorCode::MathOverflow)?) as u64;
-        let effective_price = usdc_normalized / xnt_out;
+        // SECURITY FIX: Use high precision for effective price calculation
+        let effective_price = ((usdc_normalized as u128)
+            .checked_mul(1_000_000)
+            .ok_or(ErrorCode::MathOverflow)?
+            .checked_div(xnt_out as u128)
+            .ok_or(ErrorCode::MathOverflow)?) as u64;
 
         msg!("Trade #{}: Buying {} XNT for {} USDC", pool.trade_count + 1, xnt_out, usdc_amount);
         msg!("Price before: {}, effective: {}, after: {}", price_before, effective_price, price_after);
@@ -144,6 +157,15 @@ pub mod bonding_curve {
         if price_after > pool.price_ceiling {
             msg!("⚠️ Price ceiling breach detected! Price would be ${}", price_after as f64 / 1_000_000.0);
             msg!("Ceiling: ${}", pool.price_ceiling as f64 / 1_000_000.0);
+
+            // SECURITY: Cooldown check removed per user request
+            // let clock = Clock::get()?;
+            // let time_since_last_defense = clock.unix_timestamp - pool.last_ceiling_defense;
+            // require!(
+            //     time_since_last_defense >= pool.defense_cooldown,
+            //     ErrorCode::DefenseCooldownActive
+            // );
+            // msg!("Cooldown check passed ({} seconds since last defense)", time_since_last_defense);
 
             // Calculate how much XNT to inject to bring price back to ceiling
             // Target: new_usdc / (new_xnt + injection) = price_ceiling
@@ -187,6 +209,10 @@ pub mod bonding_curve {
 
             msg!("✅ Price defended: ${}", final_price as f64 / 1_000_000.0);
             msg!("New XNT reserve: {}", final_xnt_reserve);
+
+            // Update last defense timestamp
+            let clock = Clock::get()?;
+            pool.last_ceiling_defense = clock.unix_timestamp;
         }
 
         // Transfer USDC from buyer to pool
@@ -217,19 +243,23 @@ pub mod bonding_curve {
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
         token::transfer(cpi_ctx, xnt_out)?;
 
-        // Update pool state (including any ceiling defense injection)
+        // SECURITY FIX (Issue #8): Calculate all values first for atomic update
         let final_xnt_reserve = (new_xnt_reserve as u64)
             .checked_add(xnt_injected)
             .ok_or(ErrorCode::MathOverflow)?;
-
-        pool.xnt_reserve = final_xnt_reserve;
-        pool.usdc_reserve = new_usdc_reserve as u64;
-
-        // Update k to reflect new reserves after ceiling defense
-        pool.k = (final_xnt_reserve as u128)
+        let final_usdc_reserve = new_usdc_reserve as u64;
+        let final_k = (final_xnt_reserve as u128)
             .checked_mul(new_usdc_reserve)
             .ok_or(ErrorCode::MathOverflow)?;
 
+        // Invariant checks
+        require!(final_k > 0, ErrorCode::InvalidState);
+        require!(final_xnt_reserve > 0 && final_usdc_reserve > 0, ErrorCode::InvalidState);
+
+        // SECURITY FIX (Issue #8): Atomic state update - all fields updated together
+        pool.xnt_reserve = final_xnt_reserve;
+        pool.usdc_reserve = final_usdc_reserve;
+        pool.k = final_k;
         pool.trade_count += 1;
 
         Ok(())
@@ -266,21 +296,32 @@ pub mod bonding_curve {
         require!(usdc_out > 0, ErrorCode::ZeroOutput);
 
         // Denormalize USDC output if e6 (divide by 1000 to get e6)
+        // SECURITY FIX: Round UP to favor user and prevent rounding exploitation
         let usdc_out_transfer = if pool.usdc_decimals == 6 {
-            usdc_out / 1000
+            (usdc_out + 999) / 1000  // Round up
         } else {
             usdc_out
         };
 
         // Calculate effective price (with proper decimal handling)
-        let price_before = pool.usdc_reserve / pool.xnt_reserve;
+        // SECURITY FIX: Use high precision arithmetic (multiply first, divide last)
+        let price_before = ((pool.usdc_reserve as u128)
+            .checked_mul(1_000_000)
+            .ok_or(ErrorCode::MathOverflow)?
+            .checked_div(pool.xnt_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?) as u64;
         // Calculate price_after with 6 decimal precision: (usdc * 1e6) / xnt
         let price_after = ((new_usdc_reserve as u128)
             .checked_mul(1_000_000)
             .ok_or(ErrorCode::MathOverflow)?
             .checked_div(new_xnt_reserve)
             .ok_or(ErrorCode::MathOverflow)?) as u64;
-        let effective_price = usdc_out / xnt_amount;
+        // SECURITY FIX: Use high precision for effective price calculation
+        let effective_price = ((usdc_out as u128)
+            .checked_mul(1_000_000)
+            .ok_or(ErrorCode::MathOverflow)?
+            .checked_div(xnt_amount as u128)
+            .ok_or(ErrorCode::MathOverflow)?) as u64;
 
         msg!("Trade #{}: Selling {} XNT for {} USDC", pool.trade_count + 1, xnt_amount, usdc_out_transfer);
         msg!("Price before: {}, effective: {}, after: {}", price_before, effective_price, price_after);
@@ -290,6 +331,15 @@ pub mod bonding_curve {
         if price_after < pool.price_floor {
             msg!("⚠️ Price floor breach detected! Price would be ${}", price_after as f64 / 1_000_000.0);
             msg!("Floor: ${}", pool.price_floor as f64 / 1_000_000.0);
+
+            // SECURITY: Cooldown check removed per user request
+            // let clock = Clock::get()?;
+            // let time_since_last_defense = clock.unix_timestamp - pool.last_floor_defense;
+            // require!(
+            //     time_since_last_defense >= pool.defense_cooldown,
+            //     ErrorCode::DefenseCooldownActive
+            // );
+            // msg!("Cooldown check passed ({} seconds since last defense)", time_since_last_defense);
 
             // Calculate how much XNT to remove to bring price back to floor
             // Target: new_usdc / (new_xnt - removal) = price_floor
@@ -337,6 +387,10 @@ pub mod bonding_curve {
 
             msg!("✅ Price defended: ${}", final_price as f64 / 1_000_000.0);
             msg!("New XNT reserve: {}", final_xnt_reserve);
+
+            // Update last defense timestamp
+            let clock = Clock::get()?;
+            pool.last_floor_defense = clock.unix_timestamp;
         }
 
         // Transfer XNT from seller to pool
@@ -367,13 +421,23 @@ pub mod bonding_curve {
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
         token::transfer(cpi_ctx, usdc_out_transfer)?;
 
-        // Update pool state (accounting for XNT removal if floor defense triggered)
+        // SECURITY FIX (Issue #8): Calculate all values first for atomic update
         let final_xnt_reserve = (new_xnt_reserve as u64)
             .checked_sub(xnt_removed)
             .ok_or(ErrorCode::MathOverflow)?;
+        let final_usdc_reserve = new_usdc_reserve as u64;
+        let final_k = (final_xnt_reserve as u128)
+            .checked_mul(new_usdc_reserve)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        // Invariant checks
+        require!(final_k > 0, ErrorCode::InvalidState);
+        require!(final_xnt_reserve > 0 && final_usdc_reserve > 0, ErrorCode::InvalidState);
+
+        // SECURITY FIX (Issue #8): Atomic state update - all fields updated together
         pool.xnt_reserve = final_xnt_reserve;
-        pool.usdc_reserve = new_usdc_reserve as u64;
-        pool.k = (final_xnt_reserve as u128).checked_mul(new_usdc_reserve).ok_or(ErrorCode::MathOverflow)?;
+        pool.usdc_reserve = final_usdc_reserve;
+        pool.k = final_k;
         pool.trade_count += 1;
 
         Ok(())
@@ -1028,11 +1092,19 @@ pub struct Buy<'info> {
     pub pool_usdc: Account<'info, TokenAccount>,
 
     /// Buyer's USDC token account (source)
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = buyer_usdc.mint == pool.usdc_mint @ ErrorCode::InvalidMint,
+        constraint = buyer_usdc.owner == buyer.key() @ ErrorCode::InvalidOwner
+    )]
     pub buyer_usdc: Account<'info, TokenAccount>,
 
     /// Buyer's XNT token account (destination)
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = buyer_xnt.mint == pool.xnt_mint @ ErrorCode::InvalidMint,
+        constraint = buyer_xnt.owner == buyer.key() @ ErrorCode::InvalidOwner
+    )]
     pub buyer_xnt: Account<'info, TokenAccount>,
 
     /// Ceiling reserve PDA (authority for ceiling_reserve_xnt)
@@ -1080,11 +1152,19 @@ pub struct Sell<'info> {
     pub pool_usdc: Account<'info, TokenAccount>,
 
     /// Seller's XNT token account (source)
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = seller_xnt.mint == pool.xnt_mint @ ErrorCode::InvalidMint,
+        constraint = seller_xnt.owner == seller.key() @ ErrorCode::InvalidOwner
+    )]
     pub seller_xnt: Account<'info, TokenAccount>,
 
     /// Seller's USDC token account (destination)
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = seller_usdc.mint == pool.usdc_mint @ ErrorCode::InvalidMint,
+        constraint = seller_usdc.owner == seller.key() @ ErrorCode::InvalidOwner
+    )]
     pub seller_usdc: Account<'info, TokenAccount>,
 
     /// Ceiling reserve XNT account (for floor defense)
@@ -1284,11 +1364,19 @@ pub struct AddLiquidity<'info> {
     pub pool_usdc: Account<'info, TokenAccount>,
 
     /// LP's XNT token account
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = lp_xnt.mint == pool.xnt_mint @ ErrorCode::InvalidMint,
+        constraint = lp_xnt.owner == lp_provider.key() @ ErrorCode::InvalidOwner
+    )]
     pub lp_xnt: Account<'info, TokenAccount>,
 
     /// LP's USDC token account
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = lp_usdc.mint == pool.usdc_mint @ ErrorCode::InvalidMint,
+        constraint = lp_usdc.owner == lp_provider.key() @ ErrorCode::InvalidOwner
+    )]
     pub lp_usdc: Account<'info, TokenAccount>,
 
     /// LP position account
@@ -1335,6 +1423,9 @@ pub struct Pool {
     pub ceiling_reserve_bump: u8, // Bump for ceiling reserve PDA
     pub price_floor: u64,     // Price floor in USDC per XNT (e.g., 1000000 for $1.00)
     pub usdc_decimals: u8,    // USDC decimals (6 or 9), used for normalization
+    pub last_ceiling_defense: i64, // SECURITY: Timestamp of last ceiling defense activation
+    pub last_floor_defense: i64,   // SECURITY: Timestamp of last floor defense activation
+    pub defense_cooldown: i64,     // SECURITY: Minimum seconds between defense activations (default: 60)
 }
 
 #[account]
@@ -1385,4 +1476,12 @@ pub enum ErrorCode {
     TradingLocked,
     #[msg("Invalid USDC decimals: must be 6 or 9")]
     InvalidUsdcDecimals,
+    #[msg("Invalid mint: token account mint doesn't match pool mint")]
+    InvalidMint,
+    #[msg("Invalid owner: token account doesn't belong to signer")]
+    InvalidOwner,
+    #[msg("Defense cooldown active: ceiling/floor defense triggered too recently")]
+    DefenseCooldownActive,
+    #[msg("Invalid state: pool invariants not maintained")]
+    InvalidState,
 }
