@@ -890,8 +890,46 @@ async function executeSellSOLForUSDC() {
             const userXnt = await getAssociatedTokenAddress(xntMint, wallet.publicKey);
             const userUsdc = await getAssociatedTokenAddress(usdcMint, wallet.publicKey);
 
-            // Build transaction: wrap SOL → wSOL, sell wSOL for USDC
+            // Build transaction: create accounts if needed, wrap SOL → wSOL, sell wSOL for USDC
             const tx = new solanaWeb3.Transaction();
+
+            // Check if USDC account exists, create if needed (to receive USDC)
+            const usdcAccountInfo = await connection.getAccountInfo(userUsdc);
+            if (!usdcAccountInfo) {
+                console.log('Creating USDC token account...');
+                const createUsdcAccountIx = new solanaWeb3.TransactionInstruction({
+                    programId: new PublicKey(CONFIG.ASSOCIATED_TOKEN_PROGRAM_ID),
+                    keys: [
+                        { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+                        { pubkey: userUsdc, isSigner: false, isWritable: true },
+                        { pubkey: wallet.publicKey, isSigner: false, isWritable: false },
+                        { pubkey: usdcMint, isSigner: false, isWritable: false },
+                        { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+                        { pubkey: new PublicKey(CONFIG.TOKEN_PROGRAM_ID), isSigner: false, isWritable: false },
+                    ],
+                    data: Buffer.from([]),
+                });
+                tx.add(createUsdcAccountIx);
+            }
+
+            // Check if wSOL account exists, create if needed (to wrap SOL)
+            const xntAccountInfo = await connection.getAccountInfo(userXnt);
+            if (!xntAccountInfo) {
+                console.log('Creating wSOL token account...');
+                const createXntAccountIx = new solanaWeb3.TransactionInstruction({
+                    programId: new PublicKey(CONFIG.ASSOCIATED_TOKEN_PROGRAM_ID),
+                    keys: [
+                        { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+                        { pubkey: userXnt, isSigner: false, isWritable: true },
+                        { pubkey: wallet.publicKey, isSigner: false, isWritable: false },
+                        { pubkey: xntMint, isSigner: false, isWritable: false },
+                        { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+                        { pubkey: new PublicKey(CONFIG.TOKEN_PROGRAM_ID), isSigner: false, isWritable: false },
+                    ],
+                    data: Buffer.from([]),
+                });
+                tx.add(createXntAccountIx);
+            }
 
             // Step 1: Transfer SOL to wSOL account (wrapping)
             const transferIx = solanaWeb3.SystemProgram.transfer({
@@ -1044,6 +1082,34 @@ async function executeBuySOLWithUSDC() {
             const userXnt = await getAssociatedTokenAddress(xntMint, wallet.publicKey);
             const userUsdc = await getAssociatedTokenAddress(usdcMint, wallet.publicKey);
 
+            // Build transaction: buy wSOL with USDC, then unwrap wSOL → SOL
+            const tx = new solanaWeb3.Transaction();
+
+            // Check if USDC account exists (required to pay with USDC)
+            const usdcAccountInfo = await connection.getAccountInfo(userUsdc);
+            if (!usdcAccountInfo) {
+                throw new Error('USDC token account does not exist. You need USDC to buy XNT. Please get some USDC first.');
+            }
+
+            // Check if wSOL account exists, create if needed (to receive wSOL)
+            const xntAccountInfo = await connection.getAccountInfo(userXnt);
+            if (!xntAccountInfo) {
+                console.log('Creating wSOL token account to receive XNT...');
+                const createXntAccountIx = new solanaWeb3.TransactionInstruction({
+                    programId: new PublicKey(CONFIG.ASSOCIATED_TOKEN_PROGRAM_ID),
+                    keys: [
+                        { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+                        { pubkey: userXnt, isSigner: false, isWritable: true },
+                        { pubkey: wallet.publicKey, isSigner: false, isWritable: false },
+                        { pubkey: xntMint, isSigner: false, isWritable: false },
+                        { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+                        { pubkey: new PublicKey(CONFIG.TOKEN_PROGRAM_ID), isSigner: false, isWritable: false },
+                    ],
+                    data: Buffer.from([]),
+                });
+                tx.add(createXntAccountIx);
+            }
+
             // Derive ceiling reserve PDA
             const [ceilingReservePda] = await PublicKey.findProgramAddress(
                 [Buffer.from('ceiling_reserve'), poolAddress.toBuffer()],
@@ -1074,8 +1140,6 @@ async function executeBuySOLWithUSDC() {
                 data,
             });
 
-            // Build transaction: buy wSOL with USDC, then unwrap wSOL → SOL
-            const tx = new solanaWeb3.Transaction();
             tx.add(buyIx);
 
             // Add unwrap instruction: close wSOL account to get SOL back
