@@ -38,9 +38,9 @@ describe("E6 USDC Integration", () => {
   const USDC_DECIMALS = 6;
   const XNT_DECIMALS = 9; // wSOL native mint
 
-  const INITIAL_XNT = 100_000 * 10 ** XNT_DECIMALS; // 100K XNT (reduced for validator balance)
-  const VIRTUAL_USDC = 100_000 * 10 ** USDC_DECIMALS; // 100K USDC (e6!)
-  const CEILING_RESERVE_XNT = 300_000 * 10 ** XNT_DECIMALS; // 300K XNT reserve (for ceiling defense)
+  const INITIAL_XNT = 10_000_000 * 10 ** XNT_DECIMALS; // 10M XNT
+  const VIRTUAL_USDC = 10_000_000 * 10 ** USDC_DECIMALS; // 10M USDC (e6!)
+  const CEILING_RESERVE_XNT = 10_000_000 * 10 ** XNT_DECIMALS; // 10M XNT reserve (for ceiling defense)
   const PRICE_CEILING = 2_000_000; // $2.00 (e6 precision)
   const PRICE_FLOOR = 1_000_000; // $1.00 (e6 precision)
 
@@ -430,6 +430,33 @@ describe("E6 USDC Integration", () => {
     const initialPrice = (Number(pool.usdcReserve) * 1_000_000) / Number(pool.xntReserve);
     console.log(`Initial price: $${(initialPrice / 1e6).toFixed(6)}`);
 
+    // First, sell to bring price down from ceiling
+    const initialSell = 500_000 * 10 ** XNT_DECIMALS; // 500K XNT
+    await program.methods
+      .sell(new anchor.BN(initialSell))
+      .accounts({
+        seller: payer.publicKey,
+        pool: poolPda,
+        xntMint: NATIVE_MINT,
+        usdcMint: usdcMint,
+        poolXnt: poolXnt,
+        poolUsdc: poolUsdc,
+        sellerXnt: traderXnt,
+        sellerUsdc: traderUsdc,
+        ceilingReservePda: ceilingReservePda,
+        ceilingReserveXnt: ceilingReserveXnt,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([])
+      .rpc();
+
+    pool = await program.account.pool.fetch(poolPda);
+    const priceAfterInitialSell = (Number(pool.usdcReserve) * 1_000_000) / Number(pool.xntReserve);
+    console.log(`After initial sell: $${(priceAfterInitialSell / 1e6).toFixed(6)}`);
+
+    // Wait 2 seconds for defense cooldown
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     // Execute 3 buys and 3 sells
     for (let i = 0; i < 3; i++) {
       // Buy
@@ -561,9 +588,9 @@ describe("E6 USDC Integration", () => {
     // 1. Real USDC should decrease by withdrawal amount (e6)
     expect(realUsdcAfter).to.equal(realUsdcBefore - withdrawAmount);
 
-    // 2. Virtual USDC reserve should DECREASE by normalized amount (e6 → e9: multiply by 1000)
+    // 2. Virtual USDC reserve should INCREASE by normalized amount (price-neutral: remove real, add virtual)
     const withdrawAmountNormalized = withdrawAmount * 1000;
-    expect(Number(poolAfter.usdcReserve)).to.equal(Number(poolBefore.usdcReserve) - withdrawAmountNormalized);
+    expect(Number(poolAfter.usdcReserve)).to.equal(Number(poolBefore.usdcReserve) + withdrawAmountNormalized);
 
     // 3. Price should remain unchanged
     const priceDiff = Math.abs(priceAfter - priceBefore) / priceBefore;
