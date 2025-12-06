@@ -715,12 +715,12 @@ function setSlippage(percentage) {
         const btn = document.getElementById(`slippage-${val}`);
         if (btn) {
             if (parseFloat(val) === percentage) {
-                btn.style.background = 'rgba(91, 158, 255, 0.15)';
-                btn.style.borderColor = 'rgba(91, 158, 255, 0.3)';
+                btn.style.background = 'rgba(91, 158, 255, 0.08)';
+                btn.style.borderColor = 'rgba(91, 158, 255, 0.2)';
                 btn.style.color = '#5b9eff';
             } else {
                 btn.style.background = 'transparent';
-                btn.style.borderColor = 'rgba(139, 146, 168, 0.2)';
+                btn.style.borderColor = 'rgba(139, 146, 168, 0.15)';
                 btn.style.color = '#8b92a8';
             }
         }
