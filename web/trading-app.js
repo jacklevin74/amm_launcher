@@ -306,22 +306,16 @@ async function createWalletAndClose() {
 
 // Update wallet UI
 function updateWalletUI() {
-    const walletIconMap = {
-        'phantom': '👻',
-        'backpack': '🎒',
-        'x1': '⚡',
-        'local': '🔑'
-    };
     const walletNameMap = {
         'phantom': 'Phantom',
         'backpack': 'Backpack',
-        'x1': 'X1 Wallet',
-        'local': 'Local Wallet'
+        'x1': 'X1',
+        'local': 'Local'
     };
 
     if (!wallet) {
         // Show connect button
-        document.getElementById('connectWalletBtn').style.display = 'flex';
+        document.getElementById('connectWalletBtn').style.display = 'block';
         document.getElementById('walletConnectedDisplay').style.display = 'none';
 
         // Show "no wallet" message in panel
@@ -333,13 +327,11 @@ function updateWalletUI() {
         document.getElementById('connectWalletBtn').style.display = 'none';
         document.getElementById('walletConnectedDisplay').style.display = 'flex';
 
-        const icon = walletIconMap[walletType] || '💼';
-        const name = walletNameMap[walletType] || 'Unknown';
+        const name = walletNameMap[walletType] || 'Wallet';
         const address = wallet.publicKey.toString();
         const shortAddress = address.slice(0, 4) + '...' + address.slice(-4);
 
         // Update header wallet display
-        document.getElementById('headerWalletIcon').textContent = icon;
         document.getElementById('headerWalletType').textContent = name;
         document.getElementById('headerWalletAddress').textContent = shortAddress;
 
