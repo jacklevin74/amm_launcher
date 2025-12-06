@@ -92,7 +92,11 @@ pub mod bonding_curve {
     /// Buy XNT with USDC using constant product formula
     /// Price increases as XNT is purchased
     /// Automatically injects XNT from ceiling reserve if price approaches ceiling
-    pub fn buy(ctx: Context<Buy>, usdc_amount: u64) -> Result<()> {
+    ///
+    /// # Arguments
+    /// * `usdc_amount` - Amount of USDC to spend (e6 decimals)
+    /// * `min_xnt_out` - Minimum XNT to receive (slippage protection, e9 decimals)
+    pub fn buy(ctx: Context<Buy>, usdc_amount: u64, min_xnt_out: u64) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
 
         // Normalize USDC input if e6 (multiply by 1000 to get e9)
@@ -128,6 +132,12 @@ pub mod bonding_curve {
             .ok_or(ErrorCode::MathOverflow)? as u64;
 
         require!(xnt_out > 0, ErrorCode::ZeroOutput);
+
+        // SECURITY FIX: Slippage protection - prevent front-running and MEV attacks
+        require!(
+            xnt_out >= min_xnt_out,
+            ErrorCode::SlippageExceeded
+        );
 
         // Calculate effective price (with proper decimal handling)
         // SECURITY FIX: Use high precision arithmetic (multiply first, divide last)
@@ -181,7 +191,14 @@ pub mod bonding_curve {
                 .ok_or(ErrorCode::MathOverflow)? as u64)
                 .saturating_add(1_000_000); // Add 1 XNT buffer
 
-            msg!("💉 Injecting {} XNT from ceiling reserve", xnt_injected);
+            // SECURITY FIX: Check ceiling reserve balance BEFORE attempting transfer
+            let ceiling_reserve_balance = ctx.accounts.ceiling_reserve_xnt.amount;
+            require!(
+                ceiling_reserve_balance >= xnt_injected,
+                ErrorCode::InsufficientLiquidity
+            );
+
+            msg!("💉 Injecting {} XNT from ceiling reserve (balance: {})", xnt_injected, ceiling_reserve_balance);
 
             // Transfer XNT from ceiling reserve to pool using PDA authority
             let pool_key = pool.key();
@@ -269,7 +286,11 @@ pub mod bonding_curve {
 
     /// Sell XNT for USDC using constant product formula
     /// Price decreases as XNT is sold
-    pub fn sell(ctx: Context<Sell>, xnt_amount: u64) -> Result<()> {
+    ///
+    /// # Arguments
+    /// * `xnt_amount` - Amount of XNT to sell (e9 decimals)
+    /// * `min_usdc_out` - Minimum USDC to receive (slippage protection, e6 decimals)
+    pub fn sell(ctx: Context<Sell>, xnt_amount: u64, min_usdc_out: u64) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
 
         // Calculate USDC output using constant product formula
@@ -298,12 +319,22 @@ pub mod bonding_curve {
         require!(usdc_out > 0, ErrorCode::ZeroOutput);
 
         // Denormalize USDC output if e6 (divide by 1000 to get e6)
-        // SECURITY FIX: Round UP to favor user and prevent rounding exploitation
+        // SECURITY FIX: Round DOWN to protect pool from rounding exploitation
+        // Rounding up would allow attackers to extract extra USDC through repeated small sells
         let usdc_out_transfer = if pool.usdc_decimals == 6 {
-            (usdc_out + 999) / 1000  // Round up
+            usdc_out / 1000  // Round down (protects pool)
         } else {
             usdc_out
         };
+
+        // Add minimum output check to prevent zero-output trades
+        require!(usdc_out_transfer > 0, ErrorCode::ZeroOutput);
+
+        // SECURITY FIX: Slippage protection - prevent front-running and MEV attacks
+        require!(
+            usdc_out_transfer >= min_usdc_out,
+            ErrorCode::SlippageExceeded
+        );
 
         // Calculate effective price (with proper decimal handling)
         // SECURITY FIX: Use high precision arithmetic (multiply first, divide last)
@@ -500,6 +531,13 @@ pub mod bonding_curve {
         pool.xnt_reserve = new_xnt_reserve;
         // usdc_reserve stays the same
         pool.k = new_k;
+
+        // SECURITY FIX: Validate invariants after state change
+        let calculated_k = (pool.xnt_reserve as u128)
+            .checked_mul(pool.usdc_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(pool.k == calculated_k, ErrorCode::InvalidState);
+        require!(pool.xnt_reserve > 0 && pool.usdc_reserve > 0, ErrorCode::InvalidState);
 
         Ok(())
     }
@@ -698,6 +736,13 @@ pub mod bonding_curve {
         pool.xnt_reserve = new_xnt_reserve;
         pool.k = new_k;
 
+        // SECURITY FIX: Validate invariants after state change
+        let calculated_k = (pool.xnt_reserve as u128)
+            .checked_mul(pool.usdc_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(pool.k == calculated_k, ErrorCode::InvalidState);
+        require!(pool.xnt_reserve > 0 && pool.usdc_reserve > 0, ErrorCode::InvalidState);
+
         Ok(())
     }
 
@@ -829,9 +874,22 @@ pub mod bonding_curve {
             .checked_add(usdc_amount_normalized)
             .ok_or(ErrorCode::MathOverflow)?;
 
+        // SECURITY FIX: Update k-invariant after reserve change
+        pool.k = (pool.xnt_reserve as u128)
+            .checked_mul(pool.usdc_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        // SECURITY FIX: Validate invariants after state change
+        let calculated_k = (pool.xnt_reserve as u128)
+            .checked_mul(pool.usdc_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(pool.k == calculated_k, ErrorCode::InvalidState);
+        require!(pool.xnt_reserve > 0 && pool.usdc_reserve > 0, ErrorCode::InvalidState);
+
         msg!("✅ Withdrew {} USDC (price-neutral)", usdc_amount);
         msg!("   Virtual USDC reserve increased by: {}", usdc_amount_normalized);
         msg!("   New virtual USDC reserve: {}", pool.usdc_reserve);
+        msg!("   Updated k-invariant: {}", pool.k);
 
         Ok(())
     }
@@ -875,9 +933,22 @@ pub mod bonding_curve {
             .checked_sub(usdc_amount_normalized)
             .ok_or(ErrorCode::InsufficientLiquidity)?;
 
+        // SECURITY FIX: Update k-invariant after reserve change
+        pool.k = (pool.xnt_reserve as u128)
+            .checked_mul(pool.usdc_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        // SECURITY FIX: Validate invariants after state change
+        let calculated_k = (pool.xnt_reserve as u128)
+            .checked_mul(pool.usdc_reserve as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(pool.k == calculated_k, ErrorCode::InvalidState);
+        require!(pool.xnt_reserve > 0 && pool.usdc_reserve > 0, ErrorCode::InvalidState);
+
         msg!("✅ Deposited {} USDC (price-neutral)", usdc_amount);
         msg!("   Virtual USDC reserve decreased by: {}", usdc_amount_normalized);
         msg!("   New virtual USDC reserve: {}", pool.usdc_reserve);
+        msg!("   Updated k-invariant: {}", pool.k);
 
         Ok(())
     }
