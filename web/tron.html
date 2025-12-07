@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XDEX TRON Terminal</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Orbitron', 'Courier New', monospace;
+            background: #000000;
+            background-image:
+                linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            color: #00ffff;
+            padding: 20px;
+            line-height: 1.5;
+            font-size: 12px;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 50% 50%, rgba(0, 255, 255, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border: none;
+            margin-bottom: 20px;
+            background: transparent;
+            box-shadow: none;
+            position: relative;
+        }
+
+        .header-title {
+            flex: 1;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            margin-bottom: 4px;
+            color: #00ffff;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            text-shadow: none;
+        }
+
+        .header p {
+            font-size: 11px;
+            color: #00ffff;
+            font-weight: 400;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: none;
+        }
+
+        .wallet-connect-btn {
+            padding: 8px 16px;
+            background: transparent;
+            border: none;
+            color: #00ffff;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .wallet-connect-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+
+        .wallet-connect-btn:hover::before {
+            left: 100%;
+        }
+
+        .wallet-connect-btn:hover {
+            background: rgba(0, 255, 255, 0.1);
+            box-shadow: none;
+        }
+
+        .wallet-connected {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 12px;
+            background: rgba(0, 0, 0, 0.8);
+            border: none;
+            box-shadow: none;
+        }
+
+        .wallet-connected .wallet-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .wallet-connected .wallet-address {
+            font-size: 11px;
+            color: #00ffff;
+            font-weight: 400;
+        }
+
+        .wallet-connected .wallet-type-label {
+            font-size: 11px;
+            color: #00ffff;
+            font-weight: 400;
+        }
+
+        .wallet-connected .wallet-separator {
+            color: rgba(91, 158, 255, 0.2);
+            font-size: 10px;
+        }
+
+        .wallet-disconnect-btn {
+            padding: 4px 10px;
+            background: transparent;
+            border: none;
+            color: #00ffff;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.12s ease;
+        }
+
+        .wallet-disconnect-btn:hover {
+            background: rgba(0, 255, 255, 0.08);
+            color: #00ffff;
+        }
+
+        /* Wallet Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: rgba(10, 14, 26, 0.98);
+            border: 1px solid rgba(91, 158, 255, 0.12);
+            padding: 0;
+            max-width: 380px;
+            width: 90%;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(91, 158, 255, 0.08);
+        }
+
+        .modal-header h2 {
+            color: #00ffff;
+            font-size: 13px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #00ffff;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+            transition: color 0.12s ease;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            color: #00ffff;
+        }
+
+        .wallet-options {
+            padding: 8px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .wallet-option {
+            padding: 14px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid rgba(91, 158, 255, 0.05);
+            color: #00ffff;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.12s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            text-align: left;
+        }
+
+        .wallet-option:last-child {
+            border-bottom: none;
+        }
+
+        .wallet-option:hover {
+            background: rgba(91, 158, 255, 0.04);
+        }
+
+        .wallet-option .wallet-details {
+            flex: 1;
+        }
+
+        .wallet-option .wallet-name {
+            display: block;
+            margin-bottom: 3px;
+            color: #00ffff;
+        }
+
+        .wallet-option .wallet-desc {
+            font-size: 10px;
+            color: #00ffff;
+            font-weight: 400;
+        }
+
+        .wallet-option.testing .wallet-name {
+            color: #00ffff;
+        }
+
+        .wallet-option.testing .wallet-desc {
+            color: #00ffff;
+        }
+
+        /* Collapsible Section */
+        .collapsible-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+            padding: 12px;
+            background: rgba(91, 158, 255, 0.02);
+            border: 1px solid rgba(91, 158, 255, 0.1);
+            transition: background 0.12s ease;
+        }
+
+        .collapsible-header:hover {
+            background: rgba(91, 158, 255, 0.04);
+        }
+
+        .collapsible-triangle {
+            font-size: 10px;
+            color: #00ffff;
+            transition: transform 0.15s ease;
+            display: inline-block;
+            width: 12px;
+        }
+
+        .collapsible-triangle.open {
+            transform: rotate(90deg);
+        }
+
+        .collapsible-title {
+            margin: 0;
+            color: #00ffff;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.2s ease;
+        }
+
+        .collapsible-content.open {
+            max-height: 300px;
+        }
+
+        .collapsible-inner {
+            padding: 12px;
+            border: 1px solid rgba(91, 158, 255, 0.1);
+            border-top: none;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            border: 1px solid rgba(91, 158, 255, 0.15);
+            padding: 20px;
+            background: rgba(91, 158, 255, 0.01);
+        }
+
+        .panel h2 {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(91, 158, 255, 0.12);
+            font-size: 1.3em;
+            color: #00ffff;
+        }
+
+        .wallet-info {
+            background: rgba(91, 158, 255, 0.02);
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 2px solid rgba(91, 158, 255, 0.3);
+        }
+
+        .wallet-info .label {
+            color: #00ffff;
+            font-size: 0.9em;
+        }
+
+        .wallet-info .value {
+            font-size: 1.2em;
+            margin-top: 5px;
+            word-break: break-all;
+            color: #00ffff;
+        }
+
+        .balance-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .balance-item {
+            background: rgba(91, 158, 255, 0.02);
+            padding: 15px;
+            text-align: center;
+            border: 1px solid rgba(91, 158, 255, 0.12);
+        }
+
+        .balance-item .label {
+            color: #00ffff;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .balance-item .amount {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #00ffff;
+        }
+
+        .price-display {
+            background: rgba(91, 158, 255, 0.02);
+            padding: 20px;
+            text-align: center;
+            margin: 15px 0;
+            border: 1px solid rgba(91, 158, 255, 0.12);
+        }
+
+        .price-display .current-price {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #00ffff;
+        }
+
+        .price-display .price-label {
+            color: #00ffff;
+            margin-bottom: 10px;
+        }
+
+        .price-range {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(91, 158, 255, 0.12);
+        }
+
+        .price-range span {
+            color: #00ffff;
+        }
+
+        .trade-form {
+            margin-top: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #00ffff;
+            font-size: 0.95em;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(91, 158, 255, 0.02);
+            border: 1px solid rgba(91, 158, 255, 0.12);
+            color: #00ffff;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            background: rgba(91, 158, 255, 0.03);
+            border-color: rgba(91, 158, 255, 0.25);
+        }
+
+        .quote-display {
+            background: rgba(91, 158, 255, 0.02);
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 2px solid rgba(139, 146, 168, 0.3);
+        }
+
+        .quote-display .quote-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+        }
+
+        .quote-display .quote-label {
+            color: #00ffff;
+        }
+
+        .quote-display .quote-value {
+            color: #00ffff;
+            font-weight: bold;
+        }
+
+        .btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: 2px solid;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-buy {
+            background: rgba(0, 255, 255, 0.04);
+            border-color: rgba(0, 255, 255, 0.3);
+            color: #00ffff;
+        }
+
+        .btn-buy:hover:not(:disabled) {
+            background: rgba(0, 255, 255, 0.08);
+        }
+
+        .btn-sell {
+            background: rgba(0, 255, 255, 0.04);
+            border-color: rgba(0, 255, 255, 0.3);
+            color: #00ffff;
+        }
+
+        .btn-sell:hover:not(:disabled) {
+            background: rgba(0, 255, 255, 0.08);
+        }
+
+        .btn-primary {
+            background: rgba(0, 255, 255, 0.04);
+            border-color: rgba(0, 255, 255, 0.3);
+            color: #00ffff;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: rgba(0, 255, 255, 0.08);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border-color: rgba(0, 255, 255, 0.25);
+            color: #00ffff;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: rgba(0, 255, 255, 0.06);
+        }
+
+        .btn-full {
+            grid-column: 1 / -1;
+        }
+
+        .status {
+            padding: 12px;
+            margin: 15px 0;
+            border-left: 2px solid;
+            font-size: 0.95em;
+        }
+
+        .status.success {
+            background: rgba(0, 255, 255, 0.04);
+            border-color: rgba(0, 255, 255, 0.3);
+            color: #00ffff;
+        }
+
+        .status.error {
+            background: rgba(0, 255, 255, 0.04);
+            border-color: rgba(0, 255, 255, 0.3);
+            color: #00ffff;
+        }
+
+        .status.info {
+            background: rgba(0, 255, 255, 0.04);
+            border-color: rgba(0, 255, 255, 0.3);
+            color: #00ffff;
+        }
+
+        .trade-history {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .trade-item {
+            padding: 10px;
+            margin: 8px 0;
+            border-left: 3px solid;
+            background: rgba(91, 158, 255, 0.02);
+            font-size: 0.9em;
+        }
+
+        .trade-item.buy {
+            border-color: rgba(91, 158, 255, 0.4);
+        }
+
+        .trade-item.sell {
+            border-color: #00ffff;
+        }
+
+        .trade-item .trade-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .trade-item .trade-type {
+            font-weight: bold;
+        }
+
+        .trade-item.buy .trade-type {
+            color: #00ffff;
+        }
+
+        .trade-item.sell .trade-type {
+            color: #00ffff;
+        }
+
+        .trade-item .trade-time {
+            color: #888;
+            font-size: 0.85em;
+        }
+
+        .quick-amounts {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .quick-amount-btn {
+            padding: 8px;
+            font-size: 0.9em;
+            background: rgba(0, 255, 255, 0.03);
+            border: 1px solid rgba(0, 255, 255, 0.15);
+            color: #00ffff;
+            cursor: pointer;
+        }
+
+        .quick-amount-btn:hover {
+            background: rgba(0, 255, 255, 0.08);
+        }
+
+        .loading {
+            display: inline-block;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .position-summary {
+            background: rgba(91, 158, 255, 0.03);
+            padding: 15px;
+            margin: 15px 0;
+            border: 1px solid rgba(91, 158, 255, 0.15);
+        }
+
+        .position-summary .position-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            padding: 5px 0;
+        }
+
+        .position-summary .position-label {
+            color: #00ffff;
+        }
+
+        .position-summary .position-value {
+            color: #00ffff;
+            font-weight: bold;
+        }
+
+        .position-summary .position-value.positive {
+            color: #00ffff;
+        }
+
+        .position-summary .position-value.negative {
+            color: #00ffff;
+        }
+
+        /* Uniswap-style token cards */
+        .token-input-card {
+            background: rgba(91, 158, 255, 0.02);
+            border: 1px solid rgba(91, 158, 255, 0.12);
+            padding: 16px;
+            margin: 12px 0;
+        }
+
+        .token-input-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .input-label {
+            font-size: 0.85em;
+            color: #00ffff;
+        }
+
+        .token-input-body {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .token-amount-input {
+            flex: 1;
+            font-size: 1.8em;
+            font-weight: 500;
+            background: transparent;
+            border: none;
+            color: #00ffff;
+            font-family: 'Courier New', monospace;
+            outline: none;
+            padding: 8px 0;
+        }
+
+        .token-amount-input::placeholder {
+            color: rgba(91, 158, 255, 0.2);
+        }
+
+        .token-amount-display {
+            flex: 1;
+            font-size: 1.8em;
+            font-weight: 500;
+            color: #00ffff;
+            padding: 8px 0;
+        }
+
+        .token-select {
+            background: rgba(0, 255, 255, 0.04);
+            border: 1px solid rgba(0, 255, 255, 0.15);
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .token-symbol {
+            font-size: 1em;
+            font-weight: 600;
+            color: #00ffff;
+        }
+
+        .swap-arrow {
+            text-align: center;
+            font-size: 1.5em;
+            color: #00ffff;
+            margin: -8px 0;
+            position: relative;
+            z-index: 1;
+            background: rgba(0, 255, 255, 0.04);
+            border: 1px solid rgba(0, 255, 255, 0.15);
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 8px;
+        }
+
+        .swap-arrow:hover {
+            background: rgba(0, 255, 255, 0.08);
+            transform: scale(1.1);
+        }
+
+        .trade-details-inline {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(0, 255, 255, 0.1);
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 0.9em;
+            color: #00ffff;
+        }
+
+        .detail-row span:last-child {
+            color: #00ffff;
+            font-weight: 500;
+        }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                font-size: 11px;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 8px;
+                padding: 10px 12px;
+                align-items: flex-start;
+                background: rgba(0, 0, 0, 0.3);
+                border-bottom: 1px solid rgba(91, 158, 255, 0.1);
+            }
+
+            .header-title h1 {
+                font-size: 13px;
+                margin-bottom: 2px;
+            }
+
+            .header-title p {
+                font-size: 9px;
+                opacity: 0.8;
+            }
+
+            #walletButtonContainer {
+                width: 100%;
+            }
+
+            .wallet-connect-btn {
+                width: 100%;
+                justify-content: center;
+                padding: 5px 10px;
+                font-size: 10px;
+                background: rgba(91, 158, 255, 0.03);
+                border: 1px solid rgba(91, 158, 255, 0.1);
+            }
+
+            .wallet-connect-btn:hover {
+                background: rgba(91, 158, 255, 0.06);
+            }
+
+            .wallet-connected {
+                width: 100%;
+                justify-content: space-between;
+                padding: 4px 8px;
+                background: rgba(91, 158, 255, 0.02);
+                border: 1px solid rgba(91, 158, 255, 0.08);
+                gap: 6px;
+            }
+
+            .wallet-connected .wallet-info {
+                gap: 5px;
+                font-size: 9px;
+            }
+
+            .wallet-connected .wallet-type-label {
+                font-size: 9px;
+            }
+
+            .wallet-connected .wallet-address {
+                font-size: 9px;
+                max-width: 100px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .wallet-connected .wallet-separator {
+                font-size: 8px;
+            }
+
+            .wallet-disconnect-btn {
+                padding: 3px 7px;
+                font-size: 9px;
+                border: 1px solid rgba(139, 146, 168, 0.15);
+            }
+
+            .wallet-disconnect-btn:hover {
+                background: rgba(255, 107, 107, 0.06);
+                border-color: rgba(255, 107, 107, 0.25);
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            /* Reorder panels: Market & Trading first, Wallet & Position second */
+            .panel-wallet {
+                order: 2;
+            }
+
+            .panel-market {
+                order: 1;
+            }
+
+            /* Make wallet section collapsible on mobile */
+            .panel-wallet h2 {
+                cursor: pointer;
+                user-select: none;
+                position: relative;
+                padding-right: 20px;
+            }
+
+            .panel-wallet h2::after {
+                content: '▼';
+                position: absolute;
+                right: 0;
+                font-size: 10px;
+                transition: transform 0.2s ease;
+            }
+
+            .panel-wallet.collapsed h2::after {
+                transform: rotate(-90deg);
+            }
+
+            .panel-wallet.collapsed .wallet-section {
+                display: none;
+            }
+
+            .panel-wallet.collapsed #statusMessages {
+                display: none;
+            }
+
+            .panel {
+                padding: 15px;
+            }
+
+            .panel h2 {
+                font-size: 1.1em;
+                margin-bottom: 12px;
+                padding-bottom: 8px;
+            }
+
+            .balance-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .balance-item {
+                padding: 12px;
+            }
+
+            .balance-item .label {
+                font-size: 0.85em;
+            }
+
+            .balance-item .amount {
+                font-size: 1.3em;
+            }
+
+            .price-display {
+                padding: 15px;
+            }
+
+            .price-display .current-price {
+                font-size: 2em;
+            }
+
+            .token-input-card {
+                padding: 12px;
+            }
+
+            .token-amount-input,
+            .token-amount-display {
+                font-size: 1.5em;
+            }
+
+            .quick-amounts {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .btn-group {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            button {
+                padding: 12px 20px;
+                font-size: 1em;
+            }
+
+            .position-summary {
+                padding: 12px;
+            }
+
+            .modal {
+                width: 95%;
+                max-width: 95%;
+            }
+
+            .collapsible-header {
+                padding: 10px;
+            }
+
+            .collapsible-title {
+                font-size: 11px;
+            }
+
+            /* Transaction log on mobile */
+            #transactionLog {
+                max-height: 200px !important;
+                font-size: 0.8em;
+            }
+
+            .trade-details-inline {
+                font-size: 0.85em;
+            }
+
+            .detail-row {
+                font-size: 0.85em;
+            }
+        }
+
+        /* Extra small devices */
+        @media (max-width: 480px) {
+            body {
+                font-size: 10px;
+            }
+
+            .header-title h1 {
+                font-size: 13px;
+            }
+
+            .price-display .current-price {
+                font-size: 1.8em;
+            }
+
+            .token-amount-input,
+            .token-amount-display {
+                font-size: 1.3em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-title">
+                <h1>XDEX TERMINAL</h1>
+                <p>Live Bonding Curve Trading | $1.00 - $2.00 Corridor</p>
+            </div>
+            <div id="walletButtonContainer">
+                <button class="wallet-connect-btn" id="connectWalletBtn" onclick="openWalletModal()">
+                    Connect Wallet
+                </button>
+                <div class="wallet-connected" id="walletConnectedDisplay" style="display: none;">
+                    <div class="wallet-info">
+                        <span class="wallet-type-label" id="headerWalletType">Phantom</span>
+                        <span class="wallet-separator">·</span>
+                        <span class="wallet-address" id="headerWalletAddress">-</span>
+                    </div>
+                    <button class="wallet-disconnect-btn" onclick="disconnectWallet()">Disconnect</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Wallet Selection Modal -->
+        <div class="modal-overlay" id="walletModal" onclick="closeWalletModalOnOverlay(event)">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Connect Wallet</h2>
+                    <button class="modal-close" onclick="closeWalletModal()">×</button>
+                </div>
+                <div class="wallet-options">
+                    <button class="wallet-option" onclick="connectPhantomAndClose()">
+                        <div class="wallet-details">
+                            <span class="wallet-name">Phantom</span>
+                            <span class="wallet-desc">Most popular Solana wallet</span>
+                        </div>
+                    </button>
+                    <button class="wallet-option" onclick="connectBackpackAndClose()">
+                        <div class="wallet-details">
+                            <span class="wallet-name">Backpack</span>
+                            <span class="wallet-desc">xNFT-native wallet experience</span>
+                        </div>
+                    </button>
+                    <button class="wallet-option" onclick="connectX1AndClose()">
+                        <div class="wallet-details">
+                            <span class="wallet-name">X1 Wallet</span>
+                            <span class="wallet-desc">High-performance wallet</span>
+                        </div>
+                    </button>
+                    <button class="wallet-option testing" onclick="createWalletAndClose()">
+                        <div class="wallet-details">
+                            <span class="wallet-name">Local Wallet</span>
+                            <span class="wallet-desc">For testing only (browser-based)</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- Left Column: Wallet & Position -->
+            <div class="panel panel-wallet">
+                <h2 onclick="toggleWalletPanelMobile()">WALLET & POSITION</h2>
+
+                <div class="wallet-section" id="walletSection">
+                    <div id="noWallet">
+                        <p style="margin-bottom: 15px; color: #00ffff; text-align: center; padding: 40px 20px;">
+                            Connect your wallet using the button in the top right corner to start trading
+                        </p>
+                    </div>
+
+                    <div id="hasWallet" style="display: none;">
+
+                        <div class="balance-grid">
+                            <div class="balance-item">
+                                <div class="label">XNT BALANCE</div>
+                                <div class="amount" id="solBalance">0</div>
+                            </div>
+                            <div class="balance-item">
+                                <div class="label">USDC.X BALANCE</div>
+                                <div class="amount" id="usdcBalance">0</div>
+                            </div>
+                        </div>
+
+                        <!-- Divider -->
+                        <div style="margin: 25px 0; border-top: 1px solid rgba(0, 255, 255, 0.15); position: relative;">
+                            <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.8); padding: 0 15px; color: #00ffff; font-size: 0.9em; font-weight: bold;">LIQUIDITY POOL</div>
+                        </div>
+
+                        <div class="balance-grid">
+                            <div class="balance-item">
+                                <div class="label">XNT IN POOL</div>
+                                <div class="amount" id="poolXntReserve">0</div>
+                            </div>
+                            <div class="balance-item">
+                                <div class="label">USDC.X</div>
+                                <div class="amount" id="poolRealUsdcReserve">0</div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 20px;">
+                            <div class="collapsible-header" onclick="toggleCeilingReserve()">
+                                <span class="collapsible-triangle" id="ceilingReserveTriangle">▶</span>
+                                <h3 class="collapsible-title">Ceiling Defense Reserve</h3>
+                            </div>
+                            <div class="collapsible-content" id="ceilingReserveContent">
+                                <div class="collapsible-inner">
+                                    <div class="balance-item" style="background: rgba(0, 255, 255, 0.04); border: 1px solid rgba(0, 255, 255, 0.1); padding: 10px;">
+                                        <div class="label" style="font-size: 10px; color: #00ffff;">CEILING RESERVE XNT</div>
+                                        <div class="amount" id="ceilingReserveXnt" style="color: #00ffff; font-size: 13px; font-weight: 600; margin-top: 4px;">0</div>
+                                    </div>
+                                    <div style="margin-top: 8px; font-size: 10px; color: #00ffff;">
+                                        Auto-injected when price exceeds $2.00
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="position-summary">
+                            <h3 style="margin-bottom: 10px; color: #00ffff;">Position Summary</h3>
+                            <div class="position-item">
+                                <span class="position-label">XNT Value (USDC):</span>
+                                <span class="position-value" id="xntValueUSDC">$0</span>
+                            </div>
+                            <div class="position-item">
+                                <span class="position-label">Total Portfolio:</span>
+                                <span class="position-value" id="totalPortfolio">$0</span>
+                            </div>
+                            <div class="position-item">
+                                <span class="position-label">Avg Entry Price:</span>
+                                <span class="position-value" id="avgEntryPrice">-</span>
+                            </div>
+                            <div class="position-item">
+                                <span class="position-label">P&L:</span>
+                                <span class="position-value" id="pnl">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="statusMessages"></div>
+            </div>
+
+            <!-- Right Column: Market Data & Trading -->
+            <div class="panel panel-market">
+                <h2>MARKET & TRADING</h2>
+
+                <div class="price-display">
+                    <div class="price-label">CURRENT XNT PRICE</div>
+                    <div class="current-price" id="currentPrice">$1.0000</div>
+                    <div class="price-range">
+                        <span>Floor: $1.00</span>
+                        <span>Ceiling: $2.00</span>
+                    </div>
+                </div>
+
+                <div class="trade-form">
+                    <!-- Mode Selector -->
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(0, 255, 255, 0.02); border: 1px solid rgba(0, 255, 255, 0.12);">
+                        <div style="margin-bottom: 10px; color: #00ffff; font-weight: bold;">SELECT TRADING MODE:</div>
+                        <select id="tradingModeSelect" onchange="handleTradingModeChange()" style="width: 100%; padding: 10px; background: rgba(0, 255, 255, 0.04); border: 1px solid rgba(0, 255, 255, 0.15); color: #00ffff; font-family: 'Courier New', monospace; font-size: 1em;">
+                            <option value="sell_usdc_for_sol" selected style="background: #000000; color: #00ffff;">BUY XNT: Pay USDC</option>
+                            <option value="buy_usdc_with_sol" style="background: #000000; color: #00ffff;">SELL XNT: Get USDC</option>
+                        </select>
+                    </div>
+
+                    <!-- Slippage Settings -->
+                    <div style="margin-bottom: 16px; padding: 12px; background: rgba(0, 255, 255, 0.02); border: 1px solid rgba(0, 255, 255, 0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="color: #00ffff; font-size: 11px; font-weight: 500;">Slippage Tolerance</div>
+                            <div style="display: flex; gap: 6px; align-items: center;">
+                                <button onclick="setSlippage(0.5)" id="slippage-0.5" style="padding: 4px 8px; background: rgba(0, 255, 255, 0.08); border: 1px solid rgba(0, 255, 255, 0.2); color: #00ffff; font-size: 10px; cursor: pointer;">0.5%</button>
+                                <button onclick="setSlippage(1)" id="slippage-1" style="padding: 4px 8px; background: transparent; border: 1px solid rgba(0, 255, 255, 0.15); color: #00ffff; font-size: 10px; cursor: pointer;">1%</button>
+                                <button onclick="setSlippage(2)" id="slippage-2" style="padding: 4px 8px; background: transparent; border: 1px solid rgba(0, 255, 255, 0.15); color: #00ffff; font-size: 10px; cursor: pointer;">2%</button>
+                                <input type="number" id="customSlippage" step="0.1" min="0.1" max="50" value="0.5" style="width: 50px; padding: 4px 6px; background: transparent; border: 1px solid rgba(0, 255, 255, 0.15); color: #00ffff; font-size: 10px; text-align: center;" oninput="setSlippage(parseFloat(this.value))">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Amount Input -->
+                    <div class="token-input-card">
+                        <div class="token-input-header">
+                            <span class="input-label" id="inputLabel">You pay</span>
+                        </div>
+                        <div class="token-input-body">
+                            <input type="number" id="tradeAmount" class="token-amount-input" placeholder="0.0" min="0" step="1000" value="5000" oninput="updateQuote()">
+                            <div class="token-select">
+                                <span class="token-symbol" id="inputToken">USDC</span>
+                            </div>
+                        </div>
+                        <div class="quick-amounts" id="quickAmounts">
+                            <button class="quick-amount-btn" onclick="setAmount(5000)">5K</button>
+                            <button class="quick-amount-btn" onclick="setAmount(10000)">10K</button>
+                            <button class="quick-amount-btn" onclick="setAmount(25000)">25K</button>
+                            <button class="quick-amount-btn" onclick="setAmount(50000)">50K</button>
+                        </div>
+                    </div>
+
+                    <!-- Arrow showing direction -->
+                    <div style="text-align: center; font-size: 2em; color: #00ffff; margin: 10px 0;">↓</div>
+
+                    <!-- Output Display -->
+                    <div class="token-input-card" id="quoteDisplay">
+                        <div class="token-input-header">
+                            <span class="input-label">You receive</span>
+                        </div>
+                        <div class="token-input-body">
+                            <div class="token-amount-display" id="quoteReceive">0.0</div>
+                            <div class="token-select">
+                                <span class="token-symbol" id="outputToken">XNT</span>
+                            </div>
+                        </div>
+
+                        <!-- Trade details -->
+                        <div class="trade-details-inline" id="tradeDetails">
+                            <div class="detail-row">
+                                <span>Mode</span>
+                                <span id="modeDescription">Buy XNT on AMM pool</span>
+                            </div>
+                            <div class="detail-row" id="priceRow" style="display: flex;">
+                                <span>Price</span>
+                                <span id="quotePrice">-</span>
+                            </div>
+                            <div class="detail-row" id="impactRow" style="display: flex;">
+                                <span>Price Impact</span>
+                                <span id="quotePriceImpact">-</span>
+                            </div>
+                            <div class="detail-row" id="newPriceRow" style="display: flex;">
+                                <span>New Pool Price</span>
+                                <span id="quoteNewPrice">-</span>
+                            </div>
+                            <div class="detail-row" id="minOutputRow" style="display: flex; padding-top: 8px; border-top: 1px solid rgba(0, 255, 255, 0.1); margin-top: 8px;">
+                                <span style="color: #00ffff;">Minimum Received</span>
+                                <span id="quoteMinOutput" style="color: #00ffff; font-weight: 600;">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn-buy" onclick="executeSwap()" id="swapBtn" disabled>
+                            <span id="swapBtnText">BUY XNT WITH USDC</span>
+                        </button>
+                        <button class="btn-secondary" onclick="resetTrading()">
+                            Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transaction Log Panel -->
+        <div class="panel" style="margin-top: 20px;">
+            <h2>TRANSACTION LOG</h2>
+            <div id="transactionLog" style="max-height: 300px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.85em;">
+                <div style="color: #00ffff; padding: 10px; border-left: 2px solid rgba(0, 255, 255, 0.3); background: rgba(0, 255, 255, 0.02); margin: 5px 0;">
+                    Transaction log will appear here...
+                </div>
+            </div>
+            <button class="btn-secondary" onclick="clearLog()" style="margin-top: 10px; width: 150px;">Clear Log</button>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="trading-app.js?v=13"></script>
+</body>
+</html>

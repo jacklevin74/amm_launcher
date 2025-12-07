@@ -802,6 +802,8 @@ const fs = require('fs');
   let filePath = parsedUrl.pathname;
   if (filePath === '/' || filePath === '/trading') {
     filePath = '/trading.html';
+  } else if (filePath === '/tron') {
+    filePath = '/tron.html';
   } else if (filePath === '/admin') {
     filePath = '/admin.html';
   } else if (filePath === '/wrap') {
@@ -841,6 +843,7 @@ staticServer.listen(PORT, () => {
   console.log('║         XNT TRADING TERMINAL - WEB INTERFACE              ║');
   console.log('╚════════════════════════════════════════════════════════════╝\n');
   console.log('🌐 Trading Interface: http://localhost:' + PORT + '/trading');
+  console.log('🎨 Tron Aesthetic:    http://localhost:' + PORT + '/tron');
   console.log('📊 Pool Manager:      http://localhost:' + PORT + '/');
   console.log('');
   console.log('📋 Instructions:');
