@@ -179,7 +179,10 @@ async function main() {
 
   // Verify pool state
   const pool = await program.account.pool.fetch(poolPda);
-  const price = pool.usdcReserve.toNumber() / pool.xntReserve.toNumber();
+  // Divide BN first before converting to Number to avoid overflow
+  const usdcInTokens = pool.usdcReserve.div(new anchor.BN(1e6)).toNumber();
+  const xntInTokens = pool.xntReserve.div(new anchor.BN(1e6)).toNumber();
+  const price = usdcInTokens / xntInTokens;
 
   console.log("\n" + "=".repeat(60));
   console.log("🎉 INITIALIZATION COMPLETE!");
@@ -190,8 +193,8 @@ async function main() {
   console.log(`🔐 SOL Vault: ${solVaultPda.toString()} (${(vaultBalance / LAMPORTS_PER_SOL).toLocaleString()} SOL)`);
   console.log(`🛡️ Ceiling Reserve XNT: ${ceilingReserveXntKeypair.publicKey.toString()}`);
   console.log(`\n📈 Pool State:`);
-  console.log(`   XNT Reserve: ${(pool.xntReserve.toNumber() / 1e6).toLocaleString()} XNT`);
-  console.log(`   USDC Reserve (Virtual): ${(pool.usdcReserve.toNumber() / 1e6).toLocaleString()} USDC`);
+  console.log(`   XNT Reserve: ${pool.xntReserve.div(new anchor.BN(1e6)).toNumber().toLocaleString()} XNT`);
+  console.log(`   USDC Reserve (Virtual): ${pool.usdcReserve.div(new anchor.BN(1e6)).toNumber().toLocaleString()} USDC`);
   console.log(`   Price: $${price.toFixed(2)}`);
   console.log(`\n👤 Trader: ${traderKeypair.publicKey.toString()}`);
   console.log(`   SOL: ${(traderSolBalance / LAMPORTS_PER_SOL).toLocaleString()} SOL`);
