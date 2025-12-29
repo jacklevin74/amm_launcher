@@ -13,21 +13,27 @@ sleep 2
 echo -e "${YELLOW}🧹 Cleaning up test ledger...${NC}"
 rm -rf test-ledger
 
-echo -e "${GREEN}🚀 Starting test validator...${NC}"
+# Configure Solana CLI for localhost
+echo -e "${YELLOW}⚙️  Configuring Solana CLI for localhost...${NC}"
+WALLET_PATH="$HOME/.config/solana/id.json"
+solana config set --url http://localhost:8899 --keypair ${WALLET_PATH} > /dev/null
+WALLET_ADDRESS=$(solana address -k ${WALLET_PATH})
 
-# Start validator in background
-solana-test-validator --reset > /tmp/validator.log 2>&1 &
+echo -e "${GREEN}🚀 Starting test validator with funds for ${WALLET_ADDRESS}...${NC}"
+
+# Start validator with --mint to give wallet 500M SOL directly
+solana-test-validator --reset --mint ${WALLET_ADDRESS} > /tmp/validator.log 2>&1 &
 
 VALIDATOR_PID=$!
 echo -e "${GREEN}✅ Validator started (PID: ${VALIDATOR_PID})${NC}"
 
 echo -e "${YELLOW}⏳ Waiting for validator to be ready...${NC}"
-for i in {1..10}; do
+for i in {1..15}; do
   if solana cluster-version --url http://localhost:8899 &>/dev/null; then
     echo -e "${GREEN}✅ Validator is ready!${NC}"
     break
   fi
-  echo "   Waiting... ($i/10)"
+  echo "   Waiting... ($i/15)"
   sleep 1
 done
 
@@ -36,13 +42,6 @@ if ! solana cluster-version --url http://localhost:8899 &>/dev/null; then
   echo -e "${RED}❌ Validator failed to start. Check /tmp/validator.log for details.${NC}"
   exit 1
 fi
-
-WALLET_PATH="$HOME/.config/solana/id.json"
-WALLET_ADDRESS=$(solana address -k ${WALLET_PATH})
-FAUCET_KEYPAIR="test-ledger/faucet-keypair.json"
-
-echo -e "${YELLOW}💰 Transferring 50M SOL from faucet to ${WALLET_ADDRESS}...${NC}"
-solana transfer ${WALLET_ADDRESS} 50000000 --from ${FAUCET_KEYPAIR} --url http://localhost:8899 --allow-unfunded-recipient
 
 echo -e "${GREEN}💰 Checking wallet balance...${NC}"
 BALANCE=$(solana balance ${WALLET_ADDRESS} --url http://localhost:8899)
