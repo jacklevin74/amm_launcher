@@ -3,6 +3,46 @@
 
 const { Connection, Keypair, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } = solanaWeb3;
 
+// ============================================
+// Browser-compatible Buffer alternatives
+// ============================================
+
+// Convert array of bytes to Uint8Array (replaces Buffer.from([...]))
+function bytesFrom(arr) {
+    return new Uint8Array(arr);
+}
+
+// Convert string to Uint8Array (replaces Buffer.from('string'))
+function stringToBytes(str) {
+    return new TextEncoder().encode(str);
+}
+
+// Allocate a zero-filled Uint8Array (replaces Buffer.alloc(n))
+function allocBytes(size) {
+    return new Uint8Array(size);
+}
+
+// Write a BigInt as little-endian u64 (replaces buffer.writeBigUInt64LE)
+function writeBigUInt64LE(arr, value, offset = 0) {
+    const bigVal = BigInt(value);
+    for (let i = 0; i < 8; i++) {
+        arr[offset + i] = Number((bigVal >> BigInt(i * 8)) & BigInt(0xff));
+    }
+    return arr;
+}
+
+// Concatenate multiple Uint8Arrays (replaces Buffer.concat([...]))
+function concatBytes(...arrays) {
+    const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const arr of arrays) {
+        result.set(arr, offset);
+        offset += arr.length;
+    }
+    return result;
+}
+
 // Configuration - will be loaded from server
 let CONFIG = {
     RPC_URL: 'http://localhost:8899',
@@ -959,7 +999,7 @@ async function executeSellSOLForUSDC() {
                         { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
                         { pubkey: new PublicKey(CONFIG.TOKEN_PROGRAM_ID), isSigner: false, isWritable: false },
                     ],
-                    data: Buffer.from([]),
+                    data: bytesFrom([]),
                 });
                 tx.add(createUsdcAccountIx);
             }
@@ -978,7 +1018,7 @@ async function executeSellSOLForUSDC() {
                         { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
                         { pubkey: new PublicKey(CONFIG.TOKEN_PROGRAM_ID), isSigner: false, isWritable: false },
                     ],
-                    data: Buffer.from([]),
+                    data: bytesFrom([]),
                 });
                 tx.add(createXntAccountIx);
             }
@@ -992,7 +1032,7 @@ async function executeSellSOLForUSDC() {
             tx.add(transferIx);
 
             // Step 2: Sync native (complete the wrap)
-            const syncNativeData = Buffer.from([17]); // SyncNative instruction discriminator
+            const syncNativeData = bytesFrom([17]); // SyncNative instruction discriminator
             const syncIx = new solanaWeb3.TransactionInstruction({
                 programId: new PublicKey(CONFIG.TOKEN_PROGRAM_ID),
                 keys: [{ pubkey: userXnt, isSigner: false, isWritable: true }],
@@ -1001,12 +1041,12 @@ async function executeSellSOLForUSDC() {
             tx.add(syncIx);
 
             // Step 3: Build sell instruction
-            const discriminator = Buffer.from([51, 230, 133, 164, 1, 127, 131, 173]);
-            const amountBuffer = Buffer.alloc(8);
-            amountBuffer.writeBigUInt64LE(BigInt(xntWithDecimals), 0);
-            const minUsdcOutBuffer = Buffer.alloc(8);
-            minUsdcOutBuffer.writeBigUInt64LE(BigInt(minUsdcOutWithDecimals), 0);
-            const data = Buffer.concat([discriminator, amountBuffer, minUsdcOutBuffer]);
+            const discriminator = bytesFrom([51, 230, 133, 164, 1, 127, 131, 173]);
+            const amountBuffer = allocBytes(8);
+            writeBigUInt64LE(amountBuffer, xntWithDecimals, 0);
+            const minUsdcOutBuffer = allocBytes(8);
+            writeBigUInt64LE(minUsdcOutBuffer, minUsdcOutWithDecimals, 0);
+            const data = concatBytes(discriminator, amountBuffer, minUsdcOutBuffer);
 
             const sellIx = new solanaWeb3.TransactionInstruction({
                 programId,
@@ -1162,24 +1202,24 @@ async function executeBuySOLWithUSDC() {
                         { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
                         { pubkey: new PublicKey(CONFIG.TOKEN_PROGRAM_ID), isSigner: false, isWritable: false },
                     ],
-                    data: Buffer.from([]),
+                    data: bytesFrom([]),
                 });
                 tx.add(createXntAccountIx);
             }
 
             // Derive ceiling reserve PDA
             const [ceilingReservePda] = await PublicKey.findProgramAddress(
-                [Buffer.from('ceiling_reserve'), poolAddress.toBuffer()],
+                [stringToBytes('ceiling_reserve'), poolAddress.toBuffer()],
                 programId
             );
 
             // Build buy instruction
-            const discriminator = Buffer.from([102, 6, 61, 18, 1, 218, 235, 234]);
-            const amountBuffer = Buffer.alloc(8);
-            amountBuffer.writeBigUInt64LE(BigInt(usdcWithDecimals), 0);
-            const minXntOutBuffer = Buffer.alloc(8);
-            minXntOutBuffer.writeBigUInt64LE(BigInt(minXntOutWithDecimals), 0);
-            const data = Buffer.concat([discriminator, amountBuffer, minXntOutBuffer]);
+            const discriminator = bytesFrom([102, 6, 61, 18, 1, 218, 235, 234]);
+            const amountBuffer = allocBytes(8);
+            writeBigUInt64LE(amountBuffer, usdcWithDecimals, 0);
+            const minXntOutBuffer = allocBytes(8);
+            writeBigUInt64LE(minXntOutBuffer, minXntOutWithDecimals, 0);
+            const data = concatBytes(discriminator, amountBuffer, minXntOutBuffer);
 
             const buyIx = new solanaWeb3.TransactionInstruction({
                 programId,
@@ -1200,7 +1240,7 @@ async function executeBuySOLWithUSDC() {
             tx.add(buyIx);
 
             // Add unwrap instruction: close wSOL account to get SOL back
-            const closeAccountData = Buffer.from([9]); // CloseAccount instruction discriminator
+            const closeAccountData = bytesFrom([9]); // CloseAccount instruction discriminator
             const closeIx = new solanaWeb3.TransactionInstruction({
                 programId: new PublicKey(CONFIG.TOKEN_PROGRAM_ID),
                 keys: [
